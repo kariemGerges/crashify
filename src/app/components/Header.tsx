@@ -31,13 +31,13 @@ export default function Header() {
                 <div className="flex justify-between items-center h-16 lg:h-20">
                     {/* Logo */}
                     <div className="flex items-center border-amber-950">
-                        <Logo />
+                        <Logo size={120}/>
                     </div>
 
                     {/* Desktop Navigation */}
                     <div className="hidden lg:flex items-center space-x-8">
                         <Link
-                            href="#Services"
+                            href="/pages/services"
                             className={`font-medium transition-colors
                                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}
@@ -45,7 +45,7 @@ export default function Header() {
                             Services
                         </Link>
                         <Link
-                            href="#Blog"
+                            href="/pages/blog"
                             className={`font-medium transition-colors
                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}
@@ -53,7 +53,7 @@ export default function Header() {
                             Blog
                         </Link>
                         <Link
-                            href="#about"
+                            href="/pages/about"
                             className={`font-medium transition-colors
                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}
@@ -61,7 +61,7 @@ export default function Header() {
                             About
                         </Link>
                         <Link
-                            href="#contact"
+                            href="/pages/contact"
                             className={`font-medium transition-colors
                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}
@@ -83,7 +83,7 @@ export default function Header() {
 
                     {/* Mobile Menu Button */}
                     <button
-                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                        onClick={() => setMobileMenuOpen(!mobileMenuOpen )}
                         className="lg:hidden p-2 hover:bg-red-700"
                     >
                         {mobileMenuOpen ? (
@@ -106,9 +106,11 @@ export default function Header() {
 
                 {/* Mobile Menu */}
                 {mobileMenuOpen && (
-                    <div className="lg:hidden border-t border-red-200 py-4 space-y-4">
+                    <div
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="lg:hidden border-t border-red-200 py-4 space-y-4">
                         <Link
-                            href="#Services"
+                            href="/pages/services"
                             className={`block px-4 py-2 font-medium
                                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}
@@ -116,7 +118,7 @@ export default function Header() {
                             Services
                         </Link>
                         <Link
-                            href="#Blog"
+                            href="/pages/blog"
                             className={`block px-4 py-2 font-medium
                             ${isScrolled ? 'text-gray-950' : ''}
                             `}
@@ -124,7 +126,7 @@ export default function Header() {
                             Blog
                         </Link>
                         <Link
-                            href="#about"
+                            href="/pages/about"
                             className={`block px-4 py-2 font-medium
                                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}
@@ -132,7 +134,7 @@ export default function Header() {
                             About
                         </Link>
                         <Link
-                            href="#contact"
+                            href="/pages/contact"
                             className={`block px-4 py-2 font-medium
                                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}

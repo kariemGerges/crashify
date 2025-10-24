@@ -1,4 +1,4 @@
-import { Phone, Mail, MapPin, Twitter, Linkedin, Youtube } from 'lucide-react';
+import { Phone, Mail, MapPin, Twitter, Linkedin, Youtube, Link } from 'lucide-react';
 import Logo from '@/app/components/logo'
 
 export default function Footer() {
@@ -16,24 +16,24 @@ export default function Footer() {
                             affordable, and reliable coverage.
                         </p>
                         <div className="flex space-x-4">
-                            <a
+                            <Link
                                 href="#"
                                 className="text-red-700 shadow-amber-600 transition-colors "
                             >
                                 <Linkedin size={20} />
-                            </a>
-                            <a
+                            </Link>
+                            <Link
                                 href="#"
                                 className="text-red-700 shadow-amber-600 transition-colors "
                             >
                                 <Twitter size={20} />
-                            </a>
-                            <a
+                            </Link>
+                            <Link
                                 href="#"
                                 className="text-red-700 shadow-amber-600 transition-colors "
                             >
                                 <Youtube size={20} />
-                            </a>
+                            </Link>
                         </div>
                     </div>
 
@@ -60,28 +60,28 @@ export default function Footer() {
                         <h3 className="font-bold text-lg mb-4">Company</h3>
                         <ul className="space-y-2 text-sm">
                             <li>
-                                <a
+                                <Link
                                     href="#"
                                     className="text-gray-400 hover:text-[#e60000] transition-colors"
                                 >
                                     About Us
-                                </a>
+                                </Link>
                             </li>
                             <li>
-                                <a
+                                <Link
                                     href="#"
                                     className="text-gray-400 hover:text-[#e60000] transition-colors"
                                 >
                                     Careers
-                                </a>
+                                </Link>
                             </li>
                             <li>
-                                <a
+                                <Link
                                     href="#"
                                     className="text-gray-400 hover:text-[#e60000] transition-colors"
                                 >
                                     Blog
-                                </a>
+                                </Link>
                             </li>
                         </ul>
                     </div>
@@ -137,15 +137,15 @@ export default function Footer() {
                         © 2024 Crashify. All rights reserved.
                     </p>
                     <div className="flex space-x-6 text-sm">
-                        <a href="#" className="text-red-600 transition-colors">
+                        <Link href="#" className="text-red-600 transition-colors">
                             Privacy Policy
-                        </a>
-                        <a href="#" className="text-red-600 transition-colors">
+                        </Link>
+                        <Link href="#" className="text-red-600 transition-colors">
                             Terms of Service
-                        </a>
-                        <a href="#" className="text-red-600 transition-colors">
+                        </Link>
+                        <Link href="#" className="text-red-600 transition-colors">
                             Cookie Policy
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </div>
