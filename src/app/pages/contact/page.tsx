@@ -1,54 +1,4 @@
-// 'use client';
-// import { useState } from 'react';
 
-// export default function ContactPage() {
-//   const [form, setForm] = useState({
-//     FirstName: '',
-//     LastName: '',
-//     email: '',
-//     message: '',
-//   });
-
-//   const [status, setStatus] = useState<string | null>(null);
-
-//   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-//     setForm({ ...form, [e.target.name]: e.target.value });
-//   };
-
-//   const handleSubmit = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     setStatus('Sending...');
-
-//     try {
-//       const res = await fetch('/api/sendEmail', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         body: JSON.stringify(form),
-//       });
-
-//       if (!res.ok) throw new Error('Failed to send message');
-//       setStatus('✅ Message sent successfully!');
-//       setForm({ FirstName: '', LastName: '', email: '', message: '' });
-//     } catch (err) {
-//       console.error(err);
-//       setStatus('❌ Failed to send message.');
-//     }
-//   };
-
-//   return (
-//     <section className="max-w-lg mx-auto p-6">
-//       <h2 className="text-2xl font-bold mb-4">Contact Us</h2>
-//       <form onSubmit={handleSubmit} className="space-y-3">
-//         <input name="FirstName" placeholder="First Name" value={form.FirstName} onChange={handleChange} className="border p-2 w-full rounded" required />
-//         <input name="LastName" placeholder="Last Name" value={form.LastName} onChange={handleChange} className="border p-2 w-full rounded" required />
-//         <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} className="border p-2 w-full rounded" required />
-//         <textarea name="message" placeholder="Message" value={form.message} onChange={handleChange} className="border p-2 w-full rounded h-28" required />
-//         <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
-//       </form>
-//       {status && <p className="mt-3 text-sm">{status}</p>}
-//     </section>
-//   );
-// }
 'use client';
 import { useState } from 'react';
 
@@ -95,7 +45,7 @@ export default function ContactPage() {
             </svg>
           </div>
           <h2 className="text-4xl font-bold text-white mb-3">Get Your Free Quote</h2>
-          <p className="text-gray-400 text-lg">Fill out the form below and we'll get back to you within mins</p>
+          <p className="text-gray-400 text-lg">Fill out the form below and we&apos;ll get back to you within mins</p>
           <div className="mt-6 h-1 w-24 bg-gradient-to-r from-red-600 to-red-800 mx-auto rounded-full"></div>
         </div>
 

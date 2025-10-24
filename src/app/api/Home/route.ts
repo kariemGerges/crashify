@@ -1,13 +1,7 @@
-import { NextResponse } from "next/server";
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextResponse } from 'next/server';
 import dbConnect from '@/server/config/mongoDb';
 
-
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse
-) {
+export async function GET() {
     await dbConnect();
-    res.status(200).json({ message: 'Connected to MongoDB' });
-    return NextResponse.json({ message: 'Hello, Next.js!' });
+    return NextResponse.json({ message: 'Connected to MongoDB' });
 }

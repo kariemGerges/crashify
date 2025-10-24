@@ -1,4 +1,5 @@
 import TakeSpin from '@/app/components/TakeSpin';
+import Image from 'next/image';
 export default function HowItWorks() {
     const steps = [
         {
@@ -134,7 +135,7 @@ export default function HowItWorks() {
                                 <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden border border-slate-700 hover:border-red-500 transition-all duration-500 hover:shadow-2xl hover:shadow-red-500/20 hover:-translate-y-2">
                                     {/* Image section with overlay */}
                                     <div className="relative h-48 overflow-hidden">
-                                        <img
+                                        <Image
                                             src={step.image}
                                             alt={step.title}
                                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
