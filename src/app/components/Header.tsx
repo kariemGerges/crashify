@@ -53,7 +53,7 @@ export default function Header() {
                             Blog
                         </Link>
                         <Link
-                            href="/pages/about"
+                            href="/about"
                             className={`font-medium transition-colors
                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}
@@ -126,7 +126,7 @@ export default function Header() {
                             Blog
                         </Link>
                         <Link
-                            href="/pages/about"
+                            href="/about"
                             className={`block px-4 py-2 font-medium
                                 ${isScrolled ? 'text-gray-950' : ''}
                                 `}
