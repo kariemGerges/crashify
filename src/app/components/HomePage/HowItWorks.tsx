@@ -136,6 +136,8 @@ export default function HowItWorks() {
                                     {/* Image section with overlay */}
                                     <div className="relative h-48 overflow-hidden">
                                         <Image
+                                            width={800}
+                                            height={600}
                                             src={step.image}
                                             alt={step.title}
                                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
