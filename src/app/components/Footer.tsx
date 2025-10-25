@@ -1,12 +1,14 @@
-import { Phone, Mail, MapPin, Twitter, Linkedin, Youtube, Link } from 'lucide-react';
-import Logo from '@/app/components/logo'
+import { Phone, Mail, MapPin, X, Linkedin, Youtube } from 'lucide-react';
+import Link from 'next/link';
+import Logo from '@/app/components/logo';
 
 export default function Footer() {
     return (
         <footer className="bg-[#1a1a1a] text-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-                    {/* Company Info */}
+
+                    {/* Company external links */}
                     <div>
                         <div className="flex items-center space-x-2 mb-4">
                             <Logo />
@@ -16,24 +18,30 @@ export default function Footer() {
                             affordable, and reliable coverage.
                         </p>
                         <div className="flex space-x-4">
-                            <Link
-                                href="#"
+                            <a
+                                href="https://www.linkedin.com/company/crashify/posts/?feedView=all"
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="text-red-700 shadow-amber-600 transition-colors "
                             >
                                 <Linkedin size={20} />
-                            </Link>
-                            <Link
-                                href="#"
-                                className="text-red-700 shadow-amber-600 transition-colors "
+                            </a>
+                            <a
+                                href="https://x.com/crashifyau?s=21"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-red-700 font-black shadow-amber-600 transition-colors "
                             >
-                                <Twitter size={20} />
-                            </Link>
-                            <Link
-                                href="#"
+                                <X className="font-black" size={20} />
+                            </a>
+                            <a
+                                href="https://www.youtube.com/watch?v=09z270QoPGg"
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="text-red-700 shadow-amber-600 transition-colors "
                             >
                                 <Youtube size={20} />
-                            </Link>
+                            </a>
                         </div>
                     </div>
 
@@ -61,24 +69,24 @@ export default function Footer() {
                         <ul className="space-y-2 text-sm">
                             <li>
                                 <Link
-                                    href="#"
-                                    className="text-gray-400 hover:text-[#e60000] transition-colors"
+                                    href="/pages/about"
+                                    className="text-gray-400 hover:text-red-800 transition-colors"
                                 >
                                     About Us
                                 </Link>
                             </li>
                             <li>
                                 <Link
-                                    href="#"
-                                    className="text-gray-400 hover:text-[#e60000] transition-colors"
+                                    href="/pages/contact"
+                                    className="text-gray-400 hover:text-red-800 transition-colors"
                                 >
                                     Careers
                                 </Link>
                             </li>
                             <li>
                                 <Link
-                                    href="#"
-                                    className="text-gray-400 hover:text-[#e60000] transition-colors"
+                                    href="/pages/blog"
+                                    className="text-gray-400 hover:text-red-800 transition-colors"
                                 >
                                     Blog
                                 </Link>
@@ -134,16 +142,25 @@ export default function Footer() {
                 {/* Bottom Bar */}
                 <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
                     <p className="text-gray-400 text-sm">
-                        © 2024 Crashify. All rights reserved.
+                        © 2025 Crashify. All rights reserved.
                     </p>
                     <div className="flex space-x-6 text-sm">
-                        <Link href="#" className="text-red-600 transition-colors">
+                        <Link
+                            href="#"
+                            className="text-red-600 transition-colors"
+                        >
                             Privacy Policy
                         </Link>
-                        <Link href="#" className="text-red-600 transition-colors">
+                        <Link
+                            href="pages/terms"
+                            className="text-red-600 transition-colors"
+                        >
                             Terms of Service
                         </Link>
-                        <Link href="#" className="text-red-600 transition-colors">
+                        <Link
+                            href="/pages/cookies"
+                            className="text-red-600 transition-colors"
+                        >
                             Cookie Policy
                         </Link>
                     </div>

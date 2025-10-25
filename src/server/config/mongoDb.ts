@@ -12,7 +12,9 @@ declare global {
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
-    throw new Error('Please define the MONGO_URI environment variable');
+    throw new Error(
+        'Please define the MONGODB_URI environment variable (MONGODB_URI)'
+    );
 }
 
 type MongooseCache = {
@@ -42,12 +44,13 @@ export default async function dbConnect() {
                 .then((mongoose) => {
                     return mongoose;
                 });
-            console.log('Connected to MongoDB Crashify');
         }
         cached.conn = await cached.promise;
         console.log('Connected to MongoDB Crashify');
         return cached.conn;
     } catch (error) {
-        console.log(error);
+        console.error('MongoDB connection error:', error);
+        // Re-throw so callers (API routes) can handle the failure and return appropriate responses
+        throw error;
     }
 }

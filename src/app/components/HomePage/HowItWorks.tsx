@@ -219,7 +219,7 @@ export default function HowItWorks() {
 
                 {/* CTA Section */}
                 <div className="mt-6 sm:mt-16 text-center">
-                    <TakeSpin px="px-8" py="py-8" />
+                    <TakeSpin px="px-8" py="py-4" />
                     <p className="text-gray-400 text-sm mt-6">
                         Trust your car with Crashify today!
                     </p>
