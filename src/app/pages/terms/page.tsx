@@ -79,7 +79,7 @@ export default function PrivacyPolicyPage() {
                         <p className="text-gray-300 leading-relaxed text-lg">
                             Crashify Pty Ltd{' '}
                             <span className="text-red-500">
-                                ("Crashify", "we", "us", "our")
+                                (Crashify, we, us, our)
                             </span>{' '}
                             is committed to protecting your privacy. This
                             Privacy Policy outlines how we collect, use,
@@ -143,7 +143,7 @@ export default function PrivacyPolicyPage() {
                         </div>
                         <p className="text-gray-300 mb-6">
                             If you have any questions about this Privacy Policy
-                            or wish to exercise your rights, please don't
+                            or wish to exercise your rights, please don&#39;t
                             hesitate to contact us.
                         </p>
                         <div className="grid md:grid-cols-2 gap-4">
