@@ -5,6 +5,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/server/config/mongoDb';
 import Article from '@/server/models/Article';
 
+interface MongoError {
+    name?: string;
+    code?: number;
+    keyValue?: Record<string, unknown>;
+    errors?: Record<string, unknown>;
+}
+
 // --- CREATE a new article ---
 export async function POST(request: NextRequest) {
     try {
@@ -12,17 +19,18 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const newArticle = await Article.create(body);
         return NextResponse.json(newArticle, { status: 201 });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error(error);
-        if (error.name === 'ValidationError') {
+        const err = error as MongoError;
+        if (err?.name === 'ValidationError') {
             return NextResponse.json(
-                { message: 'Validation Error', errors: error.errors },
+                { message: 'Validation Error', errors: err.errors },
                 { status: 400 }
             );
         }
-        if (error.code === 11000) {
+        if (err?.code === 11000) {
             return NextResponse.json(
-                { message: 'Duplicate key error', field: error.keyValue },
+                { message: 'Duplicate key error', field: err.keyValue },
                 { status: 409 }
             );
         }
@@ -34,7 +42,7 @@ export async function POST(request: NextRequest) {
 }
 
 // --- FETCH all articles ---
-export async function GET(request: NextRequest) {
+export async function GET() {
     try {
         await dbConnect();
 

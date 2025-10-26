@@ -7,14 +7,13 @@ import Article from '@/server/models/Article';
 // --- FETCH a single article by its slug ---
 export async function GET(
     request: NextRequest,
-    { params }: { params: { slug: string } }
+    context: { params: Promise<{ slug: string }> }
 ) {
     try {
         await dbConnect();
 
         // Get the slug from the URL parameters
-        const { slug } = params;
-
+        const { slug } = await context.params;
         if (!slug) {
             return NextResponse.json(
                 { message: 'Slug is required' },

@@ -60,4 +60,5 @@ export interface Article {
     publicationDate: string; // Using string for ISO 8601 date
     slug: string;
     article: ArticleSection[];
+    tags?: string[]; // Optional tags field
 }

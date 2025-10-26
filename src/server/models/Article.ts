@@ -4,7 +4,13 @@ import mongoose, { Schema, Document } from 'mongoose';
 import { Article, ArticleAuthor, ArticleSection } from '@/server/types/article';
 
 // Mongoose Document interface
-export interface IArticle extends Article, Document {}
+export interface IArticle extends Document<unknown, Article> {
+    title: string;
+    slug: string;
+    publicationDate: Date;
+    author: ArticleAuthor;
+    article: ArticleSection[];
+}
 
 // --- Schemas ---
 
@@ -49,8 +55,8 @@ const ArticleSchema = new Schema<IArticle>(
     {
         title: { type: String, required: true },
         slug: { type: String, required: true, unique: true, index: true },
-        // Cast Date to any to satisfy TypeScript when the Article type expects a different primitive
-        publicationDate: { type: Date as any, required: true },
+        // MongoDB handles dates natively
+        publicationDate: { type: Schema.Types.Date, required: true },
         author: { type: ArticleAuthorSchema, required: true },
         article: [ArticleSectionSchema],
     },

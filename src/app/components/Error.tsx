@@ -56,8 +56,8 @@ const ErrorComponent: React.FC = () => {
                         <span className="block text-red-600 mt-2">TRACK</span>
                     </h2>
                     <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
-                        Looks like you took a wrong turn. The page you're
-                        looking for doesn't exist or has been moved.
+                        Looks like you took a wrong turn. The page you&apos;re
+                        looking for doesn&apos;t exist or has been moved.
                     </p>
                 </div>
 

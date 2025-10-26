@@ -107,7 +107,12 @@ export default async function ArticleDetailPage({ params }: { params: { slug: st
 
                             {/* Section Content */}
                             {section.content.map((content, j) => {
-                                const c = content as any;
+                                interface ContentType {
+                                    type: 'paragraph' | 'quote' | 'list';
+                                    text?: string;
+                                    items?: string[];
+                                }
+                                const c = content as ContentType;
 
                                 if (c.type === 'paragraph') {
                                     return (
@@ -133,7 +138,7 @@ export default async function ArticleDetailPage({ params }: { params: { slug: st
                                     );
                                 }
 
-                                if (c.type === 'list' && c.items?.length > 0) {
+                                if (c.type === 'list' && c.items && c.items.length > 0) {
                                     return (
                                         <ul
                                             key={j}
@@ -163,11 +168,11 @@ export default async function ArticleDetailPage({ params }: { params: { slug: st
                 </div>
 
                 {/* Tags */}
-                {Array.isArray((article as any).tags) &&
-                    (article as any).tags.length > 0 && (
+                {Array.isArray(article.tags) &&
+                    article.tags.length > 0 && (
                         <div className="mt-12 pt-8 border-t-2 border-zinc-800">
                             <div className="flex flex-wrap gap-3">
-                                {(article as any).tags.map((tag: string) => (
+                                {article.tags.map((tag: string) => (
                                     <span
                                         key={tag}
                                         className="px-4 py-2 bg-zinc-900 border border-zinc-800 text-sm font-bold hover:border-red-600 transition-colors cursor-pointer"
