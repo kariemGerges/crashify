@@ -1,6 +1,8 @@
+
 import Image from 'next/image';
 import carImage from '../../../../public/heroCar.png';
 import TakeSpin from '../TakeSpin';
+import StatCard from '@/app/components/HomePage/animated-stats-cards';
 export default function CrashifyHero() {
     return (
         <section className="relative min-h-screen bg-black overflow-hidden">
@@ -13,9 +15,9 @@ export default function CrashifyHero() {
             <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
                 {/* Top Title */}
                 <div className="text-center mb-6 sm:mb-8 lg:mb-12">
-                    <h2 className="text-white text-sm sm:text-base lg:text-lg font-light tracking-widest mb-2">
-                        AI Motor Vehicle Damage Assessment
-                    </h2>
+                    <h1 className="text-white text-2xl sm:text-base lg:text-4xl font-light tracking-widest mb-2">
+                        Book. Assess. Report. All in 48 Hours.
+                    </h1>
                 </div>
 
                 {/* Car Image Section */}
@@ -38,12 +40,12 @@ export default function CrashifyHero() {
                                     >
                                         <stop
                                             offset="0%"
-                                            stopColor="#3b82f6"
+                                            stopColor="#FF0000"
                                             stopOpacity="0.6"
                                         />
                                         <stop
                                             offset="100%"
-                                            stopColor="#06b6d4"
+                                            stopColor="#FF0000"
                                             stopOpacity="0.6"
                                         />
                                     </linearGradient>
@@ -97,7 +99,7 @@ export default function CrashifyHero() {
                                 </line>
 
                                 {/* Detection points */}
-                                <circle cx="200" cy="125" r="4" fill="#06b6d4">
+                                <circle cx="200" cy="125" r="4" fill="#FF0000">
                                     <animate
                                         attributeName="r"
                                         values="3;6;3"
@@ -105,7 +107,7 @@ export default function CrashifyHero() {
                                         repeatCount="indefinite"
                                     />
                                 </circle>
-                                <circle cx="400" cy="100" r="4" fill="#3b82f6">
+                                <circle cx="400" cy="100" r="4" fill="#FF0000">
                                     <animate
                                         attributeName="r"
                                         values="3;6;3"
@@ -113,7 +115,7 @@ export default function CrashifyHero() {
                                         repeatCount="indefinite"
                                     />
                                 </circle>
-                                <circle cx="600" cy="125" r="4" fill="#06b6d4">
+                                <circle cx="600" cy="125" r="4" fill="#FF0000">
                                     <animate
                                         attributeName="r"
                                         values="3;6;3"
@@ -132,12 +134,16 @@ export default function CrashifyHero() {
                         />
 
                         {/* Scanning overlay effect */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-500/5 to-transparent animate-pulse"></div>
+                        <div
+                            className="absolute inset-0 rounded-full 
+                        bg-gradient-to-b from-transparent via-gray-300/5 to-transparent
+                        animate-pulse"
+                        ></div>
                     </div>
                 </div>
 
                 {/* Text Content Section */}
-                <div className="max-w-4xl mx-auto text-center space-y-6 sm:space-y-8">
+                <div className="max-w-4xl mx-auto text-center space-y-1 sm:space-y-8">
                     {/* Main Heading */}
                     <div className="inline-block px-6 sm:px-8 py-3 sm:py-4">
                         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r text-blue-50">
@@ -147,24 +153,16 @@ export default function CrashifyHero() {
                     {/* Description */}
                     <div className=" px-6 sm:px-10 lg:px-16 py-6 sm:py-8 lg:py-10 rounded-lg mx-4 sm:mx-0">
                         <p className="text-white text-base sm:text-lg lg:text-xl leading-relaxed font-light">
-                            Using AI vehicle damage detection technology in the
-                            motor insurance claims. By leveraging{' '}
-                            <span className="font-semibold">AI algorithms</span>
-                            ,{' '}
-                            <span className="font-semibold">
-                                computer vision
-                            </span>
-                            , and{' '}
-                            <span className="font-semibold">
-                                machine learning models
-                            </span>
-                            , we accurately assess and detect damage to vehicles
-                            quickly and efficiently. This can streamline the
-                            claims process, improve accuracy in assessing
-                            damages, and ultimately enhance customer
-                            satisfaction.
+                            Crashify transforms the traditional vehicle
+                            assessment process with smart AI automation and
+                            professional coordination. Our streamlined booking
+                            system eliminates delays, reduces administrative
+                            overhead, and ensures consistent 48-hour report
+                            delivery. No more chasing quotes, managing
+                            spreadsheets, or waiting weeks for assessments.
                         </p>
                     </div>
+                    <StatCard />
                     {/* CTA Button */}
                     <TakeSpin px="px-12" py="py-4" />
                 </div>

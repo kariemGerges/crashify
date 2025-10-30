@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, memo } from 'react';
+import { AlignHorizontalJustifyEnd } from 'lucide-react';
 
 function WhyChooseUs() {
     const [isVisible, setIsVisible] = useState(false);
@@ -31,9 +32,9 @@ function WhyChooseUs() {
 
     const features = [
         {
-            title: 'Industry Expertise',
+            title: 'Guaranteed 48-Hour Delivery',
             description:
-                'Our specialized team employs advanced AI tools to analyze both light and heavy commercial vehicles, caravans, and motorbikes, eliminating concerns over human error.',
+                'We take turnaround time seriously. Every assessment is completed and delivered within 48 hours, with automated notifications keeping all parties informed throughout the process.',
             icon: (
                 <svg
                     className="w-8 h-8"
@@ -51,9 +52,9 @@ function WhyChooseUs() {
             ),
         },
         {
-            title: 'Tailored Solutions',
+            title: 'Professional Coordination',
             description:
-                'We recognize that each client has unique requirements, and our AI-driven services can be customized to address a wide range of operational needs, including estimating varying labour rates as dictated by each insurance provider.',
+                'Forget juggling multiple phone calls and emails. Crashify automatically notifies clients, vehicle owners, and repairers with all necessary information, ensuring everyone stays on the same page.',
             icon: (
                 <svg
                     className="w-8 h-8"
@@ -71,9 +72,9 @@ function WhyChooseUs() {
             ),
         },
         {
-            title: 'Commitment to Excellence',
+            title: 'Streamlined Workflow',
             description:
-                'We uphold quality, reliability, and integrity in all assessments, delivering the highest standards of service through fully automated processes.',
+                'From initial booking to final invoice, every step is automated. Your team saves hours of administrative work while maintaining professional service standards.',
             icon: (
                 <svg
                     className="w-8 h-8"
@@ -88,6 +89,14 @@ function WhyChooseUs() {
                         d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
                     />
                 </svg>
+            ),
+        },
+        {
+            title: 'Flexible Service Options',
+            description:
+                'Light vehicles, heavy commercial, machinery - we handle it all. Same-day urgent bookings available. Services tailored for insurance companies, fleet managers, and assessing firms.',
+            icon: (
+                <AlignHorizontalJustifyEnd className="w-8 h-8" />
             ),
         },
     ];

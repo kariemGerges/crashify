@@ -4,9 +4,9 @@ export default function HowItWorks() {
     const steps = [
         {
             number: '01',
-            title: 'Submit Your Claim',
+            title: 'Online Booking (2 minutes)',
             description:
-                'Upload photos and details of the damaged vehicle through our secure platform.',
+                'Complete our smart booking form with vehicle details, location, and required services. Upload necessary documents securely.',
             image: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=800&q=80',
             icon: (
                 <svg
@@ -26,9 +26,9 @@ export default function HowItWorks() {
         },
         {
             number: '02',
-            title: 'AI Analysis',
+            title: 'Automated Coordination',
             description:
-                'Our advanced AI technology analyzes the damage using sophisticated algorithms and databases.',
+                'Our system immediately notifies all relevant parties - clients, vehicle owners, and repairers - with confirmation details and next steps. No manual follow-ups needed.',
             image: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&q=80',
             icon: (
                 <svg
@@ -48,9 +48,9 @@ export default function HowItWorks() {
         },
         {
             number: '03',
-            title: 'Instant Report',
+            title: 'Professional Assessment (48 hours)',
             description:
-                'Receive a detailed assessment report with accurate cost estimates within minutes.',
+                'Our qualified assessors complete on-site/Desktop evaluations using industry-standard methodologies. Photos, measurements, and detailed reports are compiled professionally.',
             image: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=800&q=80',
             icon: (
                 <svg
@@ -70,9 +70,9 @@ export default function HowItWorks() {
         },
         {
             number: '04',
-            title: 'Process & Approve',
+            title: 'Report Delivery & Invoice',
             description:
-                'Review the automated assessment and expedite the claims process with confidence.',
+                'Comprehensive assessment reports with detailed pricing breakdowns are delivered to all parties within 48 hours.',
             image: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=800&q=80',
             icon: (
                 <svg
@@ -115,10 +115,10 @@ export default function HowItWorks() {
                     </h2>
                     <div className="w-20 h-1 bg-gradient-to-r from-red-500 to-red-600 mx-auto mb-4 sm:mb-6"></div>
                     <p className="text-gray-300 text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-                        Utilize Crashify&apos;s advanced technology to offers services in just a few simple steps.
-                        This technology can help insurance companies expedite
-                        the claims process, reduce fraud, and ensure fair and
-                        accurate assessments.
+                        Utilize Crashify&apos;s advanced technology to offers
+                        services in just a few simple steps. This technology can
+                        help insurance companies expedite the claims process,
+                        reduce fraud, and ensure fair and accurate assessments.
                     </p>
                 </div>
 
@@ -220,8 +220,9 @@ export default function HowItWorks() {
                 {/* CTA Section */}
                 <div className="mt-6 sm:mt-16 text-center">
                     <TakeSpin px="px-8" py="py-4" />
-                    <p className="text-gray-400 text-sm mt-6">
-                        Trust your car with Crashify today!
+                    <p className="text-gray-400 text-sm pt-8">
+                        Smart Assessment Booking | 48-Hour Guaranteed
+                        Delivery
                     </p>
                 </div>
             </div>

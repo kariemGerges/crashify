@@ -9,6 +9,7 @@ import {
     FileText,
     Camera,
     MapPin,
+    MapPinHouse,
 } from 'lucide-react';
 import Logo from '@/app/components/logo';
 import TakeSpin from '@/app/components/TakeSpin';
@@ -26,9 +27,8 @@ export default function CrashifyAbout() {
     const services = [
         {
             icon: Camera,
-            emoji: '📱',
-            title: 'Digital Vehicle Assessments',
-            desc: 'Advanced technology-driven evaluations that deliver accurate results with faster turnaround times, perfect for clients requiring immediate preliminary assessments.',
+            title: 'Comprehensive Damage Assessment',
+            desc: 'Thorough on-site evaluations with detailed photography, precise measurements, and comprehensive reporting for accurate cost estimates.',
             features: [
                 'Rapid preliminary assessments',
                 'High-resolution digital documentation',
@@ -39,9 +39,8 @@ export default function CrashifyAbout() {
         },
         {
             icon: MapPin,
-            emoji: '🔍',
-            title: 'Onsite Vehicle Assessments',
-            desc: 'Our qualified assessors conduct thorough on-location inspections, eliminating delays and providing immediate clarity for time-sensitive cases.',
+            title: 'Rapid FNOL Response',
+            desc: 'Fast-track your first notification of loss with priority scheduling and expedited reporting to reduce claim cycle times.',
             features: [
                 'Qualified professional assessors',
                 'Comprehensive on-location inspections',
@@ -52,9 +51,8 @@ export default function CrashifyAbout() {
         },
         {
             icon: Scale,
-            emoji: '⚖️',
-            title: 'Third Party (TP) Demand Handling',
-            desc: 'Expert valuation and settlement management services that ensure fair and defensible outcomes for all parties involved.',
+            title: 'On-Site Inspections',
+            desc: 'Our qualified assessors conduct immediate on-location inspections, eliminating delays and providing clarity for time-sensitive cases.',
             features: [
                 'Expert valuation services',
                 'Settlement management',
@@ -65,9 +63,8 @@ export default function CrashifyAbout() {
         },
         {
             icon: CheckCircle,
-            emoji: '✅',
-            title: 'Post-Repair Inspections (PRI)',
-            desc: 'Comprehensive quality assurance inspections conducted in strict compliance with regional regulatory requirements, protecting all stakeholders.',
+            title: 'Total Loss Evaluation',
+            desc: 'Expert valuation and settlement management services that ensure fair and defensible outcomes for all parties involved.',
             features: [
                 'Quality assurance inspections',
                 'Regulatory compliance',
@@ -78,9 +75,8 @@ export default function CrashifyAbout() {
         },
         {
             icon: FileText,
-            emoji: '📋',
-            title: 'Legal Demand Management & Review',
-            desc: 'Professional support for legal processes, ensuring full compliance and providing expert testimony when required.',
+            title: 'Quality Assurance Inspections',
+            desc: 'End-of-lease and post-repair verification conducted in strict compliance with Australian Standards and regulatory requirements.',
             features: [
                 'Legal process support',
                 'Full compliance assurance',
@@ -91,9 +87,8 @@ export default function CrashifyAbout() {
         },
         {
             icon: Shield,
-            emoji: '📊',
-            title: 'Total Loss Reporting & WOVR',
-            desc: 'Detailed documentation and complete handling of Written-Off Vehicle Register submissions, ensuring proper documentation and regulatory compliance.',
+            title: 'WOVR Management',
+            desc: 'Complete handling of Written-Off Vehicle Register submissions with proper documentation and regulatory compliance.',
             features: [
                 'Comprehensive total loss reports',
                 'WOVR submission handling',
@@ -102,6 +97,7 @@ export default function CrashifyAbout() {
             color: 'from-yellow-500 to-orange-500',
             delay: '500',
         },
+        
     ];
 
     return (
@@ -131,6 +127,7 @@ export default function CrashifyAbout() {
                         opacity: Math.max(0, 1 - scrollY / 500),
                     }}
                 >
+                    {/* · "Smart automation meets human expertise" */}
                     <div className="inline-block mb-6">
                         <div className="relative">
                             <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 blur-3xl opacity-50 animate-pulse" />
@@ -144,19 +141,20 @@ export default function CrashifyAbout() {
                     <p className="text-2xl md:text-3xl font-light text-slate-300 mb-8 max-w-3xl mx-auto">
                         Where{' '}
                         <span className="text-cyan-400 font-semibold">
-                            AI Precision
+                            Smart automation
                         </span>{' '}
                         Meets{' '}
                         <span className="text-amber-500 font-semibold">
-                            Insurance Innovation
+                            human expertise
                         </span>
                     </p>
 
                     <div className="flex flex-wrap justify-center gap-4 mb-16">
                         {[
-                            { icon: Eye, text: 'AI Vision' },
-                            { icon: Zap, text: 'Instant Analysis' },
-                            { icon: Shield, text: 'Total Accuracy' },
+                            { icon: Eye, text: 'Professional' },
+                            { icon: Zap, text: 'Efficiency' },
+                            { icon: Shield, text: 'Guarantee' },
+                            { icon: MapPinHouse, text: 'Nationwide' },
                         ].map((item, i) => (
                             <div
                                 key={i}
@@ -185,25 +183,25 @@ export default function CrashifyAbout() {
                             </div>
 
                             <p className="text-lg text-slate-300 leading-relaxed mb-6">
-                                We utilize cutting-edge AI vehicle damage
-                                detection technology to revolutionize the motor
-                                insurance claims process. By harnessing AI
-                                algorithms, computer vision, and machine
-                                learning models, we swiftly and accurately
-                                assess and detect vehicle damage, enhancing the
-                                efficiency of claims processing and overall
-                                customer satisfaction.
+                                Crashify is a professional vehicle assessment
+                                firm serving insurance companies, fleet
+                                managers, and assessing firms across Australia.
+                                We've built a streamlined booking and
+                                coordination system that eliminates the
+                                administrative burden of traditional assessment
+                                scheduling while maintaining the highest
+                                standards of professional evaluation.
                             </p>
 
                             <p className="text-lg text-slate-300 leading-relaxed">
-                                Our AI technology can analyze images or videos
-                                of damaged vehicles, identifying damage extent
-                                and location, classifying damage types, and
-                                generating detailed reports for insurance claims
-                                that consider both labour and replacement OEM
-                                part costs. This enables insurance companies to
-                                expedite claims, combat fraud, and ensure fair
-                                and precise assessments.
+                                Our network of qualified assessors conducts
+                                thorough on-site inspections using
+                                industry-standard methodologies, delivering
+                                comprehensive reports within guaranteed
+                                timeframes. By combining smart booking
+                                automation with experienced human expertise, we
+                                provide the reliability and accuracy the
+                                insurance industry demands.
                             </p>
 
                             <div className="mt-8 p-6 bg-gradient-to-r from-gray-200/10 to-gray-700/10 rounded-2xl border border-red-700/20">
@@ -248,13 +246,13 @@ export default function CrashifyAbout() {
 
                                     <div className="relative">
                                         <div className="flex items-center gap-4 mb-4">
-                                            <div
+                                            {/* <div
                                                 className={`w-16 h-16 bg-gradient-to-br ${service.color} rounded-2xl flex items-center justify-center text-3xl transform group-hover:rotate-12 transition-transform duration-500 shadow-lg`}
                                             >
                                                 {service.emoji}
-                                            </div>
+                                            </div> */}
                                             <Icon
-                                                className={`w-8 h-8 text-white/30 group-hover:text-white/70 transition-colors duration-300`}
+                                                className={`w-8 h-8 text-red-400 group-hover:text-white/70 transition-colors duration-300`}
                                             />
                                         </div>
 

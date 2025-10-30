@@ -104,7 +104,7 @@ export default function Footer() {
                                     className="text-[#e60000] mt-1 flex-shrink-0"
                                 />
                                 <span className="text-gray-400">
-                                    +6 (142) 600-0910
+                                    +6 (130) 065-5106
                                 </span>
                             </li>
                             <li className="flex items-start space-x-2">
