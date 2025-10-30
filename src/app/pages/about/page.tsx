@@ -186,7 +186,7 @@ export default function CrashifyAbout() {
                                 Crashify is a professional vehicle assessment
                                 firm serving insurance companies, fleet
                                 managers, and assessing firms across Australia.
-                                We've built a streamlined booking and
+                                We&apos;ve built a streamlined booking and
                                 coordination system that eliminates the
                                 administrative burden of traditional assessment
                                 scheduling while maintaining the highest

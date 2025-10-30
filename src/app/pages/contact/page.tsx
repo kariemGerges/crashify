@@ -256,14 +256,15 @@ export default function ContactPage() {
                 {/* Header Section */}
                 <div className="text-center mb-12 animate-fade-in">
                     <h1 className="text-5xl font-extrabold text-white mb-3">
-                        LET'S TALK! 💬
+                        LET&apos;S TALK! 💬
                     </h1>
                     <p className="text-2xl text-gray-300 mb-2">
                         Your Vehicle Assessment Partner Australia-Wide 🇦🇺
                     </p>
                     <p className="text-gray-400 text-lg max-w-3xl mx-auto">
                         Got questions? Need a quote? Want to book an assessment?
-                        We&apos;re here to help! Choose how you'd like to connect:
+                        We&apos;re here to help! Choose how you&apos;d like to
+                        connect:
                     </p>
                     <div className="mt-6 h-1 w-32 bg-red-600 mx-auto rounded-full"></div>
                 </div>
@@ -337,17 +338,23 @@ export default function ContactPage() {
                             </p>
                             <ul className="space-y-2 text-green-50 mb-6">
                                 <li className="flex items-center gap-2">
-                                    <span className="text-xl text-red-300"><Book /></span>
+                                    <span className="text-xl text-red-300">
+                                        <Book />
+                                    </span>
                                     <span>Immediate booking confirmation</span>
                                 </li>
                                 <li className="flex items-center gap-2">
-                                    <span className="text-xl text-red-300"><BellRing /></span>
+                                    <span className="text-xl text-red-300">
+                                        <BellRing />
+                                    </span>
                                     <span>
                                         Automatic notifications to all parties
                                     </span>
                                 </li>
                                 <li className="flex items-center gap-2">
-                                    <span className="text-xl text-red-300"><Sparkles /></span>
+                                    <span className="text-xl text-red-300">
+                                        <Sparkles />
+                                    </span>
                                     <span>
                                         Transparent quote before you commit
                                     </span>
