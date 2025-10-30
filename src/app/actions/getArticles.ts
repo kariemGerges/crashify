@@ -10,8 +10,8 @@ type ArticlePreview = Pick<
 export async function getArticles(): Promise<ArticlePreview[]> {
     try {
         const res = await fetch(
-            // `${process.env.APP_URL}api/articles`,
-            'http://localhost:3000/api/articles',
+            `${process.env.APP_URL}api/articles`,
+            // 'http://localhost:3000/api/articles',
 
             {
                 cache: 'no-store',
