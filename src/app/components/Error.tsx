@@ -2,7 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 
-const ErrorComponent: React.FC = () => {
+interface ErrorProps {
+    message: string;
+}
+
+export default function ErrorComponent({
+    message,
+}: ErrorProps): React.ReactElement {
     const [glitchActive, setGlitchActive] = useState(false);
 
     useEffect(() => {
@@ -72,7 +78,7 @@ const ErrorComponent: React.FC = () => {
                                 <span className="text-red-600 font-bold">
                                     ERROR:
                                 </span>{' '}
-                                RESOURCE_NOT_FOUND
+                                {message}
                             </p>
                             <p className="text-gray-500 text-xs mb-2">
                                 Status: 404 | Timestamp:{' '}
@@ -201,6 +207,4 @@ const ErrorComponent: React.FC = () => {
             `}</style>
         </div>
     );
-};
-
-export default ErrorComponent;
+}

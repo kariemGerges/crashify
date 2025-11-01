@@ -32,8 +32,8 @@ export default function Page(): React.ReactElement {
         return <Loading />;
     }
 
-    if (errorMessage && errorMessage.length > 0) {
-        return <Err />;
+    if (errorMessage) {
+        return <Err  message={errorMessage} />;
     }
 
     const readDate = (dateString: string) => {

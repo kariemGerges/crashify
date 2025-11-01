@@ -8,7 +8,7 @@ type FullArticle = Article & {
 
 export async function getArticleSlug(slug: string): Promise<FullArticle> {
     const res = await fetch(
-        `${process.env.APP_URL}api/articles/${slug}`,
+        `${process.env.NEXT_PUBLIC_APP_URL}api/articles/${slug}`,
         // `http://localhost:3000/api/articles/${slug}`,
 
         {
