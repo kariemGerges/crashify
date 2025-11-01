@@ -217,7 +217,7 @@ export default function ServicesPage() {
             ],
         },
         {
-            title: 'Post-Repair Quality Verification',
+            title: 'Post-Repair Quality Inspection',
             subtitle: 'Post-Repair',
             description:
                 'Ensure repairs meet Australian Standards with our thorough post-repair inspections. Our experienced assessors verify workmanship quality, parts compliance, and safety standards—providing confidence that vehicles are properly restored and road-ready.',

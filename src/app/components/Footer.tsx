@@ -161,13 +161,13 @@ export default function Footer() {
                     </p>
                     <div className="flex space-x-6 text-sm">
                         <Link
-                            href="pages/privacy"
+                            href="/pages/privacy"
                             className="text-red-600 transition-colors"
                         >
                             Privacy Policy
                         </Link>
                         <Link
-                            href="pages/terms"
+                            href="/pages/terms"
                             className="text-red-600 transition-colors"
                         >
                             Terms of Service
