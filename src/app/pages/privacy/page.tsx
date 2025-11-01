@@ -46,7 +46,7 @@ export default function PrivacyPolicy() {
                                 address, email, phone number)
                             </li>
                             <li className="before:content-['•'] before:text-red-500 before:font-bold before:mr-2">
-                                Driver's license information and driving history
+                                Driver license information and driving history
                             </li>
                             <li className="before:content-['•'] before:text-red-500 before:font-bold before:mr-2">
                                 Vehicle information (make, model, year, VIN)
