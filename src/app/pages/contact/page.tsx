@@ -227,14 +227,11 @@ export default function ContactPage() {
         e.preventDefault();
         setStatus('Sending...');
         try {
-            const res = await fetch(
-                'https://www.crashify.com.au/api/sendEmail',
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(form),
-                }
-            );
+            const res = await fetch('/api/sendEmail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form),
+            });
             if (!res.ok) throw new Error('Failed to send message');
             setStatus('✅ Message sent successfully!');
             setForm({
@@ -265,9 +262,8 @@ export default function ContactPage() {
                         Your Vehicle Assessment Partner Australia-Wide 🇦🇺
                     </p>
                     <p className="text-gray-400 text-lg max-w-3xl mx-auto">
-                        Got questions? Want to book an assessment?
-                        We&apos;re here to help! Choose how you&apos;d like to
-                        connect:
+                        Got questions? Want to book an assessment? We&apos;re
+                        here to help! Choose how you&apos;d like to connect:
                     </p>
                     <div className="mt-6 h-1 w-32 bg-red-600 mx-auto rounded-full"></div>
                 </div>

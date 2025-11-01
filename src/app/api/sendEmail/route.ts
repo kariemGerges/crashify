@@ -19,7 +19,7 @@ export async function POST(request: Request) {
         const sendSmtpEmail = new SendSmtpEmail();
 
         sendSmtpEmail.subject = `📬 New Contact Message from ${name}`;
-        sendSmtpEmail.sender = { name, email: "kariem.gerges@outlook.com" };
+        sendSmtpEmail.sender = { name, email: 'kariem.gerges@outlook.com' };
         sendSmtpEmail.to = [{ email: 'info@crashify.com.au' }]; // production
         // sendSmtpEmail.to = [{ email: 'kiko1086@gmail.com' }]; // testing
 
