@@ -1,13 +1,30 @@
 import { NextResponse } from 'next/server';
 import { TransactionalEmailsApi, SendSmtpEmail } from '@getbrevo/brevo';
 
-const apiInstance = new TransactionalEmailsApi();
-apiInstance.setApiKey(0, process.env.brevo_API_KEY as string);
 
 export async function POST(request: Request) {
     try {
-        const { FirstName, LastName, email, message, phone, company, userType, inquiryType, userMessage } = await request.json();
-      const name = `${FirstName} ${LastName}`;
+        const {
+            FirstName,
+            LastName,
+            email,
+            message,
+            phone,
+            company,
+            userType,
+            inquiryType,
+            userMessage,
+        } = await request.json();
+        const name = `${FirstName} ${LastName}`;
+
+        const apiInstance = new TransactionalEmailsApi();
+        apiInstance.setApiKey(0, process.env.brevo_API_KEY as string);
+
+        // Temporary debug logging
+        console.log('Environment check:', {
+            hasApiKey: !!process.env.brevo_API_KEY,
+            keyPrefix: process.env.brevo_API_KEY?.substring(0, 10) || 'MISSING',
+        });
 
         if (!name || !email || !message) {
             return NextResponse.json(
@@ -56,7 +73,9 @@ export async function POST(request: Request) {
                   </tr>
                   <tr style="background-color:#f9fafb;">
                     <td style="padding:10px; font-weight:bold; color:#333;">Company:</td>
-                    <td style="padding:10px; color:#555;">${company || 'Not provided'}</td>
+                    <td style="padding:10px; color:#555;">${
+                        company || 'Not provided'
+                    }</td>
                   </tr>
                   
                   <tr>
