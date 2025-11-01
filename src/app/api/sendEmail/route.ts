@@ -7,7 +7,7 @@ apiInstance.setApiKey(0, process.env.brevo_API_KEY as string);
 export async function POST(request: Request) {
     try {
         const { FirstName, LastName, email, message, phone, company, userType, inquiryType, userMessage } = await request.json();
-        const name = `${FirstName} ${LastName}`;
+      const name = `${FirstName} ${LastName}`;
 
         if (!name || !email || !message) {
             return NextResponse.json(

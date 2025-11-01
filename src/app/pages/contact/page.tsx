@@ -227,11 +227,14 @@ export default function ContactPage() {
         e.preventDefault();
         setStatus('Sending...');
         try {
-            const res = await fetch('/api/sendEmail', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form),
-            });
+            const res = await fetch(
+                'https://www.crashify.com.au/api/sendEmail',
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(form),
+                }
+            );
             if (!res.ok) throw new Error('Failed to send message');
             setStatus('✅ Message sent successfully!');
             setForm({
