@@ -262,7 +262,7 @@ export default function ContactPage() {
                         Your Vehicle Assessment Partner Australia-Wide 🇦🇺
                     </p>
                     <p className="text-gray-400 text-lg max-w-3xl mx-auto">
-                        Got questions? Need a quote? Want to book an assessment?
+                        Got questions? Want to book an assessment?
                         We&apos;re here to help! Choose how you&apos;d like to
                         connect:
                     </p>

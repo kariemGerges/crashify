@@ -21,8 +21,8 @@ export async function getArticles(): Promise<ArticlePreview[]> {
         const fullUrl = `${baseUrl}api/articles`;
         // console.log('[getArticles] Fetching from:', fullUrl);
 
-        // const res = await fetch(fullUrl, { cache: 'no-store' });
-                const res = await fetch('http://localhost:3000/api/articles', { cache: 'no-store' });
+        const res = await fetch(fullUrl, { cache: 'no-store' });
+                // const res = await fetch('http://localhost:3000/api/articles', { cache: 'no-store' });
 
 
         if (!res.ok) {

@@ -7,15 +7,13 @@ export default function Footer() {
         <footer className="bg-[#1a1a1a] text-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-
                     {/* Company external links */}
                     <div>
                         <div className="flex items-center space-x-2 mb-4">
                             <Logo />
                         </div>
                         <p className="text-gray-400 text-sm mb-4">
-                            Modern car insurance powered by AI technology. Fast,
-                            affordable, and reliable coverage.
+                            Professional vehicle assessments made easy.
                         </p>
                         <div className="flex space-x-4">
                             <a
@@ -69,18 +67,10 @@ export default function Footer() {
                         <ul className="space-y-2 text-sm">
                             <li>
                                 <Link
-                                    href="/pages/about"
+                                    href="/pages/services"
                                     className="text-gray-400 hover:text-red-800 transition-colors"
                                 >
-                                    About Us
-                                </Link>
-                            </li>
-                            <li>
-                                <Link
-                                    href="/pages/contact"
-                                    className="text-gray-400 hover:text-red-800 transition-colors"
-                                >
-                                    Careers
+                                    Services
                                 </Link>
                             </li>
                             <li>
@@ -90,6 +80,31 @@ export default function Footer() {
                                 >
                                     Blog
                                 </Link>
+                            </li>
+                            <li>
+                                <Link
+                                    href="/pages/about"
+                                    className="text-gray-400 hover:text-red-800 transition-colors"
+                                >
+                                    About Us
+                                </Link>
+                            </li>
+
+                            <li>
+                                <Link
+                                    href="/pages/contact"
+                                    className="text-gray-400 hover:text-red-800 transition-colors"
+                                >
+                                    Contact Us
+                                </Link>
+                            </li>
+                            <li>
+                                <a
+                                    href="mailto:info@crashify.com.au"
+                                    className="text-gray-400 hover:text-red-800 transition-colors"
+                                >
+                                    Careers
+                                </a>
                             </li>
                         </ul>
                     </div>
@@ -104,7 +119,7 @@ export default function Footer() {
                                     className="text-[#e60000] mt-1 flex-shrink-0"
                                 />
                                 <span className="text-gray-400">
-                                    +6 (130) 065-5106
+                                    1300 655 106
                                 </span>
                             </li>
                             <li className="flex items-start space-x-2">
@@ -146,7 +161,7 @@ export default function Footer() {
                     </p>
                     <div className="flex space-x-6 text-sm">
                         <Link
-                            href="#"
+                            href="pages/privacy"
                             className="text-red-600 transition-colors"
                         >
                             Privacy Policy
