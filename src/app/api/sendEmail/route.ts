@@ -1,19 +1,17 @@
 import { NextResponse } from 'next/server';
 import { TransactionalEmailsApi, SendSmtpEmail } from '@getbrevo/brevo';
 
-
 export async function POST(request: Request) {
     try {
         const {
             FirstName,
             LastName,
             email,
-            message,
             phone,
             company,
             userType,
             inquiryType,
-            userMessage,
+            message,
         } = await request.json();
         const name = `${FirstName} ${LastName}`;
 
@@ -37,8 +35,8 @@ export async function POST(request: Request) {
 
         sendSmtpEmail.subject = `📬 New Contact Message from ${name}`;
         sendSmtpEmail.sender = { name, email: 'kariem.gerges@outlook.com' };
-        sendSmtpEmail.to = [{ email: 'info@crashify.com.au' }]; // production
-        // sendSmtpEmail.to = [{ email: 'kiko1086@gmail.com' }]; // testing
+        // sendSmtpEmail.to = [{ email: 'info@crashify.com.au' }]; // production
+        sendSmtpEmail.to = [{ email: 'crashifyai@gmail.com' }]; // testing
 
         // ✨ Professional HTML Email
         sendSmtpEmail.htmlContent = `
@@ -91,7 +89,7 @@ export async function POST(request: Request) {
                   </tr>
                   <tr style="background-color:#f9fafb;">
                     <td style="padding:10px; font-weight:bold; color:#333; vertical-align:top;">Message:</td>
-                    <td style="padding:10px; color:#555; line-height:1.6;">${userMessage}</td>
+                    <td style="padding:10px; color:#555; line-height:1.6;">${message}</td>
                   </tr>
                 </table>
 
