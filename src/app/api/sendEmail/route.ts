@@ -35,8 +35,8 @@ export async function POST(request: Request) {
 
         sendSmtpEmail.subject = `📬 New Contact Message from ${name}`;
         sendSmtpEmail.sender = { name, email: 'kariem.gerges@outlook.com' };
-        // sendSmtpEmail.to = [{ email: 'info@crashify.com.au' }]; // production
-        sendSmtpEmail.to = [{ email: 'crashifyai@gmail.com' }]; // testing
+        sendSmtpEmail.to = [{ email: 'info@crashify.com.au' }]; // production
+        // sendSmtpEmail.to = [{ email: 'crashifyai@gmail.com' }]; // testing
 
         // ✨ Professional HTML Email
         sendSmtpEmail.htmlContent = `
