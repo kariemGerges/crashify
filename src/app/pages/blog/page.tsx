@@ -71,7 +71,7 @@ export default function Page(): React.ReactElement {
                 <div className="flex flex-col gap-5 sm:gap-6 md:grid md:grid-cols-2 lg:grid-cols-3">
                     {articles.map((article) => (
                         <Link
-                            href={`/pages/blogDetails`}
+                            href={`/pages/blog/${article.slug}`}
                             key={article._id}
                             className="block"
                         >
