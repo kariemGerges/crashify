@@ -1,3 +1,16 @@
+export const metadata = {
+    title: 'Crashify — AI Vehicle Assessments | Book. Assess. Report in 48 Hours',
+    description:
+        'Fast AI-assisted vehicle damage assessments for insurers & fleets. Book online — get a full report within 48 hours. Serving Australia.',
+    openGraph: {
+        title: 'Crashify — AI Vehicle Assessments (48-hour reports)',
+        description:
+            'Fast AI-assisted vehicle damage assessments for insurers & fleets. Book online — get a full report within 48 hours.',
+        url: 'https://crashify.com.au',
+        images: ['/og-image.jpg'],
+    },
+};
+
 export default function PrivacyPolicy() {
     return (
         <div className="min-h-screen bg-black text-gray-100">

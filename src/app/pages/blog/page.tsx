@@ -6,6 +6,19 @@ import Err from '@/app/components/Error';
 import { getArticles } from '@/app/actions/getArticles';
 import { Article } from '@/server/types/article';
 
+export const metadata = {
+    title: 'Crashify — AI Vehicle Assessments | Book. Assess. Report in 48 Hours',
+    description:
+        'Fast AI-assisted vehicle damage assessments for insurers & fleets. Book online — get a full report within 48 hours. Serving Australia.',
+    openGraph: {
+        title: 'Crashify — AI Vehicle Assessments (48-hour reports)',
+        description:
+            'Fast AI-assisted vehicle damage assessments for insurers & fleets. Book online — get a full report within 48 hours.',
+        url: 'https://crashify.com.au',
+        images: ['/og-image.jpg'],
+    },
+};
+
 export default function Page(): React.ReactElement {
     const [articles, setArticles] = useState<Article[]>([]);
     const [isLoading, setIsLoading] = useState(true);
