@@ -1,3 +1,23 @@
 {
-    "cSpell.words": ["Crashify"]
+    "cSpell.words": ["Crashify"],
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#5c7fe5",
+        "activityBar.background": "#5c7fe5",
+        "activityBar.foreground": "#15202b",
+        "activityBar.inactiveForeground": "#15202b99",
+        "activityBarBadge.background": "#f2adbe",
+        "activityBarBadge.foreground": "#15202b",
+        "commandCenter.border": "#e7e7e799",
+        "sash.hoverBorder": "#5c7fe5",
+        "statusBar.background": "#305cde",
+        "statusBar.foreground": "#e7e7e7",
+        "statusBarItem.hoverBackground": "#5c7fe5",
+        "statusBarItem.remoteBackground": "#305cde",
+        "statusBarItem.remoteForeground": "#e7e7e7",
+        "titleBar.activeBackground": "#305cde",
+        "titleBar.activeForeground": "#e7e7e7",
+        "titleBar.inactiveBackground": "#305cde99",
+        "titleBar.inactiveForeground": "#e7e7e799"
+    },
+    "peacock.remoteColor": "#305cde"
 }
