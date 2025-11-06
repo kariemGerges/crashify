@@ -1,6 +1,15 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+    async redirects() {
+        return [
+            {
+                source: '/about-crashify',
+                destination: 'pages/about',
+                permanent: true
+            }
+        ]
+    },
     images: {
         remotePatterns: [
             {
@@ -9,6 +18,7 @@ const nextConfig: NextConfig = {
             },
         ],
     },
+    
 };
 
 export default nextConfig;
