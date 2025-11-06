@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 const orgSchema = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
-    name: 'Crashify',
+    name: 'Crashify pty ltd',
     url: 'https://crashify.com.au',
     logo: 'https://crashify.com.au/logo.png',
     telephone: '+61 1300 655 106',
@@ -68,6 +68,10 @@ export const metadata: Metadata = {
         type: 'website',
     },
     robots: { index: true, follow: true },
+    metadataBase: new URL('https://crashify.com.au'),
+    alternates: {
+        canonical: 'https://crashify.com.au',
+    },
 };
 
 export default function RootLayout({
