@@ -1,5 +1,4 @@
 // app/sitemap.xml/route.ts
-import { NextRequest } from 'next/server';
 
 const BASE_URL = 'https://crashify.com.au';
 
@@ -43,7 +42,7 @@ function buildUrl({
   </url>`;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     const posts = await fetchPosts();
     const postUrls = posts
         .map((p) =>
