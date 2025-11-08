@@ -56,7 +56,7 @@ const ArticleSchema = new Schema<IArticle>(
         title: { type: String, required: true },
         slug: { type: String, required: true, unique: true, index: true },
         // MongoDB handles dates natively
-        publicationDate: { type: Schema.Types.Date, required: true },
+        publicationDate: { type: Schema.Types.Date, required: true, index: true },
         author: { type: ArticleAuthorSchema, required: true },
         article: [ArticleSectionSchema],
     },
@@ -69,5 +69,8 @@ const ArticleSchema = new Schema<IArticle>(
  * Prevent Mongoose from recompiling the model
  * if it's already compiled in the dev environment (HMR)
  */
+ArticleSchema.index({ publicationDate: -1, slug: 1 });
+
+
 export default mongoose.models.Article ||
     mongoose.model<IArticle>('Article', ArticleSchema);

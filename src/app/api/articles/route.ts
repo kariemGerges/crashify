@@ -1,6 +1,5 @@
 // Create and Fetch Articles API Route
 
-
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/server/config/mongoDb';
 import Article from '@/server/models/Article';
@@ -40,6 +39,7 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+export const revalidate = 3600;
 
 // --- FETCH all articles ---
 export async function GET() {
@@ -51,9 +51,17 @@ export async function GET() {
         // .sort(): Sorts by publication date, newest first
         const articles = await Article.find({})
             .select('title slug publicationDate author')
-            .sort({ publicationDate: -1 });
+            .sort({ publicationDate: -1 })
+            .lean()
+            .limit(50);
 
-        return NextResponse.json(articles, { status: 200 });
+        return NextResponse.json(articles, {
+            status: 200,
+            headers: {
+                'Cache-Control':
+                    'public, s-maxage=3600, stale-while-revalidate=86400',
+            },
+        });
     } catch (error) {
         console.error(error);
         return NextResponse.json(

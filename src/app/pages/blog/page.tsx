@@ -1,42 +1,16 @@
-'use client';
-import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Loading from '@/app/components/Loading';
-import Err from '@/app/components/Error';
 import { getArticles } from '@/app/actions/getArticles';
 import { Article } from '@/server/types/article';
 
+export const revalidate = 3600; // Revalidate every hour
 
+export const metadata = {
+    title: 'Blog - Crashify AI Vehicle Assessments',
+    description: 'Latest articles about AI-powered vehicle damage assessment',
+};
 
-export default function Page(): React.ReactElement {
-    const [articles, setArticles] = useState<Article[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [errorMessage, setErrorMessage] = useState('');
-
-    useEffect(() => {
-        const fetchArticles = async () => {
-            try {
-                const data = (await getArticles()) as unknown as Article[];
-                setArticles(data);
-            } catch {
-                setErrorMessage(
-                    'Unable to load articles. Please try again later.'
-                );
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchArticles();
-    }, []);
-
-    if (isLoading) {
-        return <Loading />;
-    }
-
-    if (errorMessage) {
-        return <Err  message={errorMessage} />;
-    }
+export default async function Page(){
+    const articles = (await getArticles()) as unknown as Article[];
 
     const readDate = (dateString: string) => {
         const options: Intl.DateTimeFormatOptions = {

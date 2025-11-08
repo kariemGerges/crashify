@@ -12,7 +12,7 @@ export async function getArticleSlug(slug: string): Promise<FullArticle> {
         // `http://localhost:3000/api/articles/${slug}`,
 
         {
-            cache: 'no-store',
+            next: { revalidate: 3600 },
         }
     );
 
