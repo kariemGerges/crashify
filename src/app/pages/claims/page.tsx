@@ -1,79 +1,20 @@
 'use client';
-import React, { useState } from 'react';
-import { AlertCircle, Upload, X, CheckCircle } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { AlertCircle, Upload, X, CheckCircle, Loader2 } from 'lucide-react';
+import {
+    AssessmentFormData,
+    FormErrors,
+    UploadedFile,
+} from '@/server/lib/types/database.types';
 
-interface FormData {
-    // Section 1
-    companyName: string;
-    yourName: string;
-    yourEmail: string;
-    yourPhone: string;
-    yourRole: string;
-    department: string;
-    // Section 2
-    assessmentType: string;
-    claimReference: string;
-    policyNumber: string;
-    incidentDate: string;
-    incidentLocation: string;
-    // Section 3
-    vehicleType: string;
-    year: string;
-    make: string;
-    model: string;
-    registration: string;
-    vin: string;
-    color: string;
-    odometer: string;
-    insuranceValueType: string;
-    insuranceValueAmount: string;
-    // Section 4
-    ownerFirstName: string;
-    ownerLastName: string;
-    ownerEmail: string;
-    ownerMobile: string;
-    ownerAltPhone: string;
-    ownerAddress: string;
-    // Section 5
-    onsiteLocationType: string;
-    locationName: string;
-    streetAddress: string;
-    suburb: string;
-    state: string;
-    postcode: string;
-    locationContactName: string;
-    locationPhone: string;
-    locationEmail: string;
-    preferredDate: string;
-    preferredTime: string;
-    accessInstructions: string;
-    // Section 7
-    incidentDescription: string;
-    damageAreas: string[];
-    specialInstructions: string;
-    internalNotes: string;
-    // Section 8
-    authorityConfirmed: boolean;
-    privacyConsent: boolean;
-    emailReportConsent: boolean;
-    smsUpdates: boolean;
-}
-
-interface FormErrors {
-    [key: string]: string;
-}
-
-interface UploadedFile {
-    id: string;
-    name: string;
-    size: number;
-    type: string;
-    preview?: string;
-}
+const API_BASE = '/api/assessments';
 
 const CrashifyForm: React.FC = () => {
+    // Form state and validation
     const [currentSection, setCurrentSection] = useState(1);
-    const [formData, setFormData] = useState<FormData>({
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadingFiles, setUploadingFiles] = useState(false);
+    const [formData, setFormData] = useState<AssessmentFormData>({
         companyName: '',
         yourName: '',
         yourEmail: '',
@@ -126,20 +67,22 @@ const CrashifyForm: React.FC = () => {
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
     const [isDragging, setIsDragging] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [assessmentId, setAssessmentId] = useState<string | null>(null);
 
-    const validateEmail = (email: string): boolean =>
+    // Form validation
+    const validateEmail = (email: string) =>
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    const validateAustralianPhone = (phone: string): boolean =>
+    const validateAustralianPhone = (phone: string) =>
         /^(?:\+?61|0)[2-478](?:[ -]?[0-9]){8}$/.test(phone.replace(/\s/g, ''));
-    const validateAustralianMobile = (mobile: string): boolean =>
-        /^04\d{8}$/.test(mobile.replace(/\s/g, ''));
 
-    const formatCurrency = (value: string): string => {
+    // Utility functions
+    const formatCurrency = (value: string) => {
         const num = value.replace(/[^0-9]/g, '');
         return num ? `$${parseInt(num).toLocaleString()}` : '';
     };
 
-    const formatMobile = (value: string): string => {
+    // Utility functions
+    const formatMobile = (value: string) => {
         const digits = value.replace(/[^0-9]/g, '');
         if (digits.length <= 4) return digits;
         if (digits.length <= 7)
@@ -150,23 +93,26 @@ const CrashifyForm: React.FC = () => {
         )}`;
     };
 
-    const handleInputChange = (
-        e: React.ChangeEvent<
-            HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-        >
-    ) => {
-        const { name, value, type } = e.target;
-        let processedValue = value;
+    // Form event handlers
+    const handleInputChange = useCallback(
+        (
+            e: React.ChangeEvent<
+                HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+            >
+        ) => {
+            const { name, value } = e.target;
+            let processedValue = value;
 
-        if (name === 'insuranceValueAmount') {
-            processedValue = formatCurrency(value);
-        } else if (name === 'ownerMobile' && value) {
-            processedValue = formatMobile(value);
-        }
+            if (name === 'insuranceValueAmount')
+                processedValue = formatCurrency(value);
+            else if (name === 'ownerMobile' && value)
+                processedValue = formatMobile(value);
 
-        setFormData((prev) => ({ ...prev, [name]: processedValue }));
-        if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
-    };
+            setFormData((prev) => ({ ...prev, [name]: processedValue }));
+            if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
+        },
+        [errors]
+    );
 
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, checked } = e.target;
@@ -183,61 +129,60 @@ const CrashifyForm: React.FC = () => {
         }));
     };
 
-    const handleFileUpload = (files: FileList | null) => {
-        if (!files) return;
+    const handleFileUpload = useCallback(
+        (files: FileList | null) => {
+            if (!files) return;
+            const validTypes = [
+                'image/jpeg',
+                'image/jpg',
+                'image/png',
+                'image/heic',
+                'image/webp',
+                'application/pdf',
+            ];
+            const maxSize = 10 * 1024 * 1024;
+            const maxFiles = 30;
 
-        const validTypes = [
-            'image/jpeg',
-            'image/jpg',
-            'image/png',
-            'image/heic',
-            'image/webp',
-            'application/pdf',
-        ];
-        const maxSize = 10 * 1024 * 1024; // 10MB
-        const maxFiles = 30;
+            Array.from(files).forEach((file) => {
+                if (uploadedFiles.length >= maxFiles) {
+                    alert(`Maximum ${maxFiles} files allowed`);
+                    return;
+                }
+                if (!validTypes.includes(file.type)) {
+                    alert(`Invalid file type: ${file.name}`);
+                    return;
+                }
+                if (file.size > maxSize) {
+                    alert(`File too large: ${file.name}. Max 10MB`);
+                    return;
+                }
 
-        Array.from(files).forEach((file) => {
-            if (uploadedFiles.length >= maxFiles) {
-                alert(`Maximum ${maxFiles} files allowed`);
-                return;
-            }
-
-            if (!validTypes.includes(file.type)) {
-                alert(
-                    `Invalid file type: ${file.name}. Only JPG, PNG, HEIC, WebP, and PDF allowed.`
-                );
-                return;
-            }
-
-            if (file.size > maxSize) {
-                alert(`File too large: ${file.name}. Maximum 10MB per file.`);
-                return;
-            }
-
-            const newFile: UploadedFile = {
-                id: Math.random().toString(36).substr(2, 9),
-                name: file.name,
-                size: file.size,
-                type: file.type,
-            };
-
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    newFile.preview = e.target?.result as string;
-                    setUploadedFiles((prev) => [...prev, newFile]);
+                const newFile: UploadedFile = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    file,
+                    uploadProgress: 0,
                 };
-                reader.readAsDataURL(file);
-            } else {
-                setUploadedFiles((prev) => [...prev, newFile]);
-            }
-        });
-    };
 
-    const removeFile = (id: string) => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        newFile.preview = e.target?.result as string;
+                        setUploadedFiles((prev) => [...prev, newFile]);
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    setUploadedFiles((prev) => [...prev, newFile]);
+                }
+            });
+        },
+        [uploadedFiles]
+    );
+
+    const removeFile = (id: string) =>
         setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
-    };
 
     const validateSection = (section: number): boolean => {
         const newErrors: FormErrors = {};
@@ -263,10 +208,8 @@ const CrashifyForm: React.FC = () => {
             if (
                 formData.incidentDate &&
                 new Date(formData.incidentDate) > new Date()
-            ) {
-                newErrors.incidentDate =
-                    'Incident date cannot be in the future';
-            }
+            )
+                newErrors.incidentDate = 'Cannot be future date';
         }
 
         if (section === 3) {
@@ -276,9 +219,8 @@ const CrashifyForm: React.FC = () => {
                 formData.year &&
                 (parseInt(formData.year) < 1900 ||
                     parseInt(formData.year) > 2026)
-            ) {
-                newErrors.year = 'Year must be between 1900 and 2026';
-            }
+            )
+                newErrors.year = 'Year must be 1900-2026';
         }
 
         if (section === 8) {
@@ -292,16 +234,148 @@ const CrashifyForm: React.FC = () => {
         return Object.keys(newErrors).length === 0;
     };
 
+    const uploadFilesToServer = async (assessmentId: string) => {
+        if (uploadedFiles.length === 0) return { success: true, uploaded: 0 };
+
+        setUploadingFiles(true);
+        const formData = new FormData();
+        uploadedFiles.forEach((f) => formData.append('files', f.file));
+
+        try {
+            const response = await fetch(`${API_BASE}/${assessmentId}/files`, {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
+
+            if (!response.ok)
+                throw new Error(result.error || 'File upload failed');
+            return result;
+        } catch (error) {
+            console.error('File upload error:', error);
+            throw error;
+        } finally {
+            setUploadingFiles(false);
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!validateSection(8)) return;
+
+        setIsSubmitting(true);
+
+        try {
+            // Prepare data
+            const payload = {
+                formData: {
+                    companyName: formData.companyName,
+                    yourName: formData.yourName,
+                    yourEmail: formData.yourEmail,
+                    yourPhone: formData.yourPhone,
+                    yourRole: formData.yourRole || undefined,
+                    department: formData.department || undefined,
+                    assessmentType: formData.assessmentType,
+                    claimReference: formData.claimReference || undefined,
+                    policyNumber: formData.policyNumber || undefined,
+                    incidentDate: formData.incidentDate || undefined,
+                    incidentLocation: formData.incidentLocation || undefined,
+                    vehicleType: formData.vehicleType || undefined,
+                    year: formData.year ? parseInt(formData.year) : undefined,
+                    make: formData.make,
+                    model: formData.model,
+                    registration:
+                        formData.registration?.toUpperCase() || undefined,
+                    vin: formData.vin?.toUpperCase() || undefined,
+                    color: formData.color || undefined,
+                    odometer: formData.odometer
+                        ? parseInt(formData.odometer)
+                        : undefined,
+                    insuranceValueType:
+                        formData.insuranceValueType || undefined,
+                    insuranceValueAmount:
+                        formData.insuranceValueAmount || undefined,
+                    ownerInfo:
+                        formData.ownerFirstName || formData.ownerLastName
+                            ? {
+                                  firstName: formData.ownerFirstName,
+                                  lastName: formData.ownerLastName,
+                                  email: formData.ownerEmail,
+                                  mobile: formData.ownerMobile,
+                                  altPhone: formData.ownerAltPhone,
+                                  address: formData.ownerAddress,
+                              }
+                            : undefined,
+                    locationInfo:
+                        formData.assessmentType === 'Onsite Assessment'
+                            ? {
+                                  type: formData.onsiteLocationType,
+                                  name: formData.locationName,
+                                  streetAddress: formData.streetAddress,
+                                  suburb: formData.suburb,
+                                  state: formData.state,
+                                  postcode: formData.postcode,
+                                  contactName: formData.locationContactName,
+                                  phone: formData.locationPhone,
+                                  email: formData.locationEmail,
+                                  preferredDate: formData.preferredDate,
+                                  preferredTime: formData.preferredTime,
+                                  accessInstructions:
+                                      formData.accessInstructions,
+                              }
+                            : undefined,
+                    incidentDescription:
+                        formData.incidentDescription || undefined,
+                    damageAreas: formData.damageAreas,
+                    specialInstructions:
+                        formData.specialInstructions || undefined,
+                    internalNotes: formData.internalNotes || undefined,
+                    authorityConfirmed: formData.authorityConfirmed,
+                    privacyConsent: formData.privacyConsent,
+                    emailReportConsent: formData.emailReportConsent,
+                    smsUpdates: formData.smsUpdates,
+                },
+            };
+
+            const response = await fetch(API_BASE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Submission failed');
+            }
+
+            // Upload files if any
+            if (uploadedFiles.length > 0) {
+                await uploadFilesToServer(result.assessment.id);
+            }
+
+            setAssessmentId(result.assessment.id);
+            setSubmitted(true);
+        } catch (error) {
+            console.error('Submission error:', error);
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to submit assessment'
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const handleNext = () => {
         if (validateSection(currentSection)) {
             if (
                 currentSection === 2 &&
                 formData.assessmentType === 'Desktop Assessment'
-            ) {
-                setCurrentSection(3); // Skip section 5 for desktop
-            } else {
-                setCurrentSection((prev) => Math.min(prev + 1, 8));
-            }
+            )
+                setCurrentSection(3);
+            else setCurrentSection((prev) => Math.min(prev + 1, 8));
         }
     };
 
@@ -309,21 +383,12 @@ const CrashifyForm: React.FC = () => {
         if (
             currentSection === 3 &&
             formData.assessmentType === 'Desktop Assessment'
-        ) {
-            setCurrentSection(2); // Skip back over section 5
-        } else {
-            setCurrentSection((prev) => Math.max(prev - 1, 1));
-        }
+        )
+            setCurrentSection(2);
+        else setCurrentSection((prev) => Math.max(prev - 1, 1));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (validateSection(8)) {
-            console.log('Form submitted:', formData, uploadedFiles);
-            setSubmitted(true);
-        }
-    };
-
+    // Render
     if (submitted) {
         return (
             <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
@@ -332,9 +397,17 @@ const CrashifyForm: React.FC = () => {
                     <h2 className="text-3xl font-bold mb-4">
                         Assessment Request Submitted
                     </h2>
+                    <p className="text-gray-300 mb-2">
+                        Thank you! Your assessment request has been received.
+                    </p>
+                    <p className="text-sm text-gray-400 mb-6">
+                        Assessment ID:{' '}
+                        <span className="text-red-500 font-mono">
+                            {assessmentId}
+                        </span>
+                    </p>
                     <p className="text-gray-300 mb-6">
-                        Thank you for submitting your assessment request. We'll
-                        review your information and send the report to{' '}
+                        We'll send the report to{' '}
                         <span className="text-red-500">
                             {formData.yourEmail}
                         </span>
@@ -343,6 +416,7 @@ const CrashifyForm: React.FC = () => {
                         onClick={() => {
                             setSubmitted(false);
                             setCurrentSection(1);
+                            setUploadedFiles([]);
                         }}
                         className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
                     >
@@ -372,6 +446,7 @@ const CrashifyForm: React.FC = () => {
         <div className="min-h-screen bg-black text-white p-4 md:p-8">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
+
                 <div className="text-center mb-8">
                     <h1 className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-red-600 to-red-400 bg-clip-text text-transparent">
                         Crashify Assessment Request
@@ -382,7 +457,7 @@ const CrashifyForm: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Progress Bar */}
+                {/* Progress bar */}
                 <div className="mb-8">
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">
@@ -416,7 +491,7 @@ const CrashifyForm: React.FC = () => {
                         {sections.find((s) => s.num === currentSection)?.title}
                     </h2>
 
-                    {/* Section 1: Requestor Information */}
+                    {/* Section 1 */}
                     {currentSection === 1 && (
                         <div className="space-y-4">
                             <div>
@@ -440,7 +515,6 @@ const CrashifyForm: React.FC = () => {
                                     </p>
                                 )}
                             </div>
-
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">
@@ -463,7 +537,6 @@ const CrashifyForm: React.FC = () => {
                                         </p>
                                     )}
                                 </div>
-
                                 <div>
                                     <label className="block text-sm font-medium mb-2">
                                         Your Email{' '}
@@ -485,7 +558,6 @@ const CrashifyForm: React.FC = () => {
                                     )}
                                 </div>
                             </div>
-
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">
@@ -507,7 +579,6 @@ const CrashifyForm: React.FC = () => {
                                         </p>
                                     )}
                                 </div>
-
                                 <div>
                                     <label className="block text-sm font-medium mb-2">
                                         Your Role/Position
@@ -523,7 +594,6 @@ const CrashifyForm: React.FC = () => {
                                     />
                                 </div>
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium mb-2">
                                     Department
@@ -541,7 +611,7 @@ const CrashifyForm: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Section 2: Claim Information */}
+                    {/* Section 2 */}
                     {currentSection === 2 && (
                         <div className="space-y-4">
                             <div>
@@ -572,7 +642,6 @@ const CrashifyForm: React.FC = () => {
                                     </p>
                                 )}
                             </div>
-
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">
@@ -588,7 +657,6 @@ const CrashifyForm: React.FC = () => {
                                         placeholder="Your internal reference"
                                     />
                                 </div>
-
                                 <div>
                                     <label className="block text-sm font-medium mb-2">
                                         Insurance Policy Number
@@ -604,7 +672,6 @@ const CrashifyForm: React.FC = () => {
                                     />
                                 </div>
                             </div>
-
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">
@@ -629,7 +696,6 @@ const CrashifyForm: React.FC = () => {
                                         </p>
                                     )}
                                 </div>
-
                                 <div>
                                     <label className="block text-sm font-medium mb-2">
                                         Location of Incident
@@ -1309,7 +1375,7 @@ const CrashifyForm: React.FC = () => {
                                     placeholder="Brief description of damage/incident"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
-                                    {formData.incidentDescription.length}/1000
+                                    {formData?.incidentDescription}/1000
                                     characters
                                 </p>
                             </div>
@@ -1547,7 +1613,6 @@ const CrashifyForm: React.FC = () => {
                         >
                             Previous
                         </button>
-
                         {currentSection < sections.length ? (
                             <button
                                 type="button"
@@ -1559,12 +1624,24 @@ const CrashifyForm: React.FC = () => {
                         ) : (
                             <button
                                 type="submit"
-                                className="px-8 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white rounded-lg transition-all font-semibold shadow-lg shadow-red-900/50"
+                                disabled={isSubmitting || uploadingFiles}
+                                className="px-8 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 disabled:opacity-50 text-white rounded-lg transition-all font-semibold shadow-lg shadow-red-900/50 flex items-center gap-2"
                             >
-                                Submit Request
+                                {(isSubmitting || uploadingFiles) && (
+                                    <Loader2
+                                        className="animate-spin"
+                                        size={16}
+                                    />
+                                )}
+                                {uploadingFiles
+                                    ? 'Uploading Files...'
+                                    : isSubmitting
+                                    ? 'Submitting...'
+                                    : 'Submit Request'}
                             </button>
                         )}
-                    </div>
+            </div>
+            
                 </form>
             </div>
         </div>
