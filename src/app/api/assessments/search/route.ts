@@ -1,5 +1,6 @@
 // =============================================
 // FILE: app/api/assessments/search/route.ts
+// http://localhost:3000/api/assessments/search?q=tesla  example
 // GET: Full-text search across assessments
 // =============================================
 
@@ -7,7 +8,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/server/lib/supabase/client'
 import type { Database } from '@/server/lib/types/database.types'
 
-type SearchAssessmentsArgs = Database['public']['Functions']['search_assessments']['Args']
 type SearchAssessmentsReturns = Database['public']['Functions']['search_assessments']['Returns']
 
 export const runtime = 'nodejs'
@@ -43,8 +43,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data })
   } catch (error) {
     console.error('Search error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: errorMessage },
       { status: 500 }
     )
   }

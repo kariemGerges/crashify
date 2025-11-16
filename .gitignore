@@ -42,3 +42,5 @@ next-env.d.ts
 
 # documentation
 claimspage-documentation.md
+
+/src/generated/prisma

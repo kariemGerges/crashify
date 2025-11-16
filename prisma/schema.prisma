@@ -1,0 +1,37 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ClaimToken {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique
+  customerEmail String
+  customerPhone String
+  customerId    String
+  policyNumber  String?
+  expiresAt     DateTime
+  isUsed        Boolean   @default(false)
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+  claimType     String?
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json?
+
+  @@index([tokenHash])
+  @@index([customerId])
+  @@index([expiresAt])
+  @@index([isUsed, expiresAt])
+}
