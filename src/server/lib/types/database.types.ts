@@ -25,7 +25,7 @@ export interface Database {
                     your_phone: string;
                     your_role: string | null;
                     department: string | null;
-                    assessment_type: 'Desktop Assessment' | 'Onsite Assessment';
+                    assessment_type: 'Desktop Assessment' | 'Onsite Assessment' | '';
                     claim_reference: string | null;
                     policy_number: string | null;
                     incident_date: string | null;
@@ -293,7 +293,7 @@ export interface AssessmentFormData {
     department?: string;
 
     // Section 2
-    assessmentType: 'Desktop Assessment' | 'Onsite Assessment' | '';
+    assessmentType?: 'Desktop Assessment' | 'Onsite Assessment' | '';
     claimReference?: string;
     policyNumber?: string;
     incidentDate?: string;
