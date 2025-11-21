@@ -229,6 +229,67 @@ export interface Database {
                     user_agent?: string | null;
                 };
             };
+            sessions: {
+                Row: {
+                    id: string;
+                    user_id: string;
+                    token: string;
+                    expires_at: string;
+                    ip_address: string | null;
+                    user_agent: string | null;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    user_id: string;
+                    token: string;
+                    expires_at: string;
+                    ip_address?: string | null;
+                    user_agent?: string | null;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    user_id?: string;
+                    token?: string;
+                    expires_at?: string;
+                    ip_address?: string | null;
+                    user_agent?: string | null;
+                    created_at?: string;
+                };
+            };
+            users: {
+                Row: {
+                    id: string;
+                    email: string;
+                    name: string;
+                    role: 'admin' | 'reviewer' | 'manager';
+                    two_factor_enabled: boolean;
+                    last_login: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    email: string;
+                    name: string;
+                    role: 'admin' | 'reviewer' | 'manager';
+                    two_factor_enabled?: boolean;
+                    last_login?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    email?: string;
+                    name?: string;
+                    role?: 'admin' | 'reviewer' | 'manager';
+                    two_factor_enabled?: boolean;
+                    last_login?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
         };
         Functions: {
             get_assessment_full: {
