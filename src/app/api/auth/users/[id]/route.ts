@@ -116,18 +116,72 @@ export async function DELETE(
             );
         }
 
-        // Soft delete (set is_active to false)
-        const { error } = await (supabase.from('users') as any)
-            .update({ is_active: false })
-            .eq('id', userId);
+        // First, verify the user exists and get current state
+        const { data: existingUser, error: fetchError } = await (
+            supabase.from('users') as any
+        )
+            .select('id, is_active, email, name')
+            .eq('id', userId)
+            .single();
+
+        if (fetchError || !existingUser) {
+            console.error('User not found:', fetchError);
+            return NextResponse.json(
+                { error: 'User not found' },
+                { status: 404 }
+            );
+        }
+
+
+        // Soft delete (set is_active to false) - allow re-deleting if already deleted
+        const {
+            data: updatedUser,
+            error,
+            count,
+        } = await (supabase.from('users') as any)
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('id', userId)
+            .select()
+            .single();
 
         if (error) {
-            console.error('Database error:', error);
+            console.error('Database update error:', error);
             return NextResponse.json(
-                { error: 'Failed to delete user' },
+                { error: 'Failed to delete user', details: error.message },
                 { status: 500 }
             );
         }
+
+        // Verify the update actually worked
+        if (!updatedUser) {
+            console.error('Update returned no data for user:', userId);
+            return NextResponse.json(
+                { error: 'Failed to delete user - no data returned' },
+                { status: 500 }
+            );
+        }
+
+        // Double-check by querying the user again
+        const { data: verifyUser } = await (supabase.from('users') as any)
+            .select('id, is_active')
+            .eq('id', userId)
+            .single();
+
+        if (verifyUser && verifyUser.is_active !== false) {
+            console.error(
+                'Verification failed - user still active:',
+                verifyUser
+            );
+            return NextResponse.json(
+                { error: 'Failed to delete user - verification failed' },
+                { status: 500 }
+            );
+        }
+
+        console.log('User successfully deleted:', {
+            userId,
+            email: existingUser.email,
+        });
 
         // Delete all user sessions
         await (supabase.from('sessions') as any).delete().eq('user_id', userId);

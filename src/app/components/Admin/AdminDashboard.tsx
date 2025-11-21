@@ -23,6 +23,7 @@ import Fady from '../../../../public/f.png';
 import { StatsOverview } from '../Admin/StatsOverview';
 import { ClaimsTab } from '../Admin/ClaimsTab';
 import { useToast } from '../Toast';
+import { ConfirmModal } from '../Admin/ConfirmModal';
 
 export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     user,
@@ -34,6 +35,15 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     const [users, setUsers] = useState<User[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [usersError, setUsersError] = useState('');
+    const [deleteConfirm, setDeleteConfirm] = useState<{
+        isOpen: boolean;
+        userId: string | null;
+        userName: string;
+    }>({
+        isOpen: false,
+        userId: null,
+        userName: '',
+    });
     const [apiData, setApiData] = useState({
         total: 0,
         pending: 0,
@@ -90,7 +100,11 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
 
         try {
             const result = await api.listUsers({ limit: 20 });
-            setUsers(result.users || []);
+            // Filter to only show active users
+            const activeUsers = (result.users || []).filter(
+                (u: User) => u.isActive !== false
+            );
+            setUsers(activeUsers);
         } catch (err: any) {
             setUsersError(err.message || 'Failed to load users');
         } finally {
@@ -113,19 +127,39 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         }
     };
 
-    const handleDeleteUser = async (userId: string) => {
-        const confirmed = await toast.showConfirm(
-            'Are you sure you want to delete this user?'
-        );
-        if (!confirmed) return;
+    const handleDeleteUser = (userId: string, userName: string) => {
+        setDeleteConfirm({
+            isOpen: true,
+            userId,
+            userName,
+        });
+    };
+
+    const confirmDeleteUser = async () => {
+        if (!deleteConfirm.userId) return;
+
+        const userId = deleteConfirm.userId;
+
+        // Optimistically remove user from list immediately
+        setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
+
+        // Close modal
+        setDeleteConfirm({ isOpen: false, userId: null, userName: '' });
 
         try {
             await api.deleteUser(userId);
             toast.showSuccess('User deleted successfully');
-            loadUsers(); // Reload the list
+            // Optionally reload to ensure sync, but user is already removed from UI
+            // loadUsers();
         } catch (err: any) {
+            // If deletion fails, reload the list to restore the user
             toast.showError(err.message || 'Failed to delete user');
+            loadUsers();
         }
+    };
+
+    const cancelDeleteUser = () => {
+        setDeleteConfirm({ isOpen: false, userId: null, userName: '' });
     };
 
     const handleLogout = async () => {
@@ -361,7 +395,8 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                                                     <button
                                                                         onClick={() =>
                                                                             handleDeleteUser(
-                                                                                u.id
+                                                                                u.id,
+                                                                                u.name
                                                                             )
                                                                         }
                                                                         className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
@@ -466,6 +501,17 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                     }}
                 />
             )}
+
+            <ConfirmModal
+                isOpen={deleteConfirm.isOpen}
+                title="Delete User"
+                message={`Are you sure you want to delete "${deleteConfirm.userName}"? This action cannot be undone.`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                onConfirm={confirmDeleteUser}
+                onCancel={cancelDeleteUser}
+                variant="danger"
+            />
         </div>
     );
 };
