@@ -374,6 +374,14 @@ export interface ClaimLinkEmail {
     expiresInHours: number;
 }
 
+export interface TwoFactorSetupEmail {
+    to: string;
+    userName: string;
+    qrCodeDataUrl: string;
+    secret: string;
+    otpauthUrl: string;
+}
+
 export class EmailService {
     private static resendClient: Resend | null = null;
     private static readonly LOG_PREFIX = '[EmailService]';
@@ -427,6 +435,22 @@ export class EmailService {
         EmailValidator.validateCustomerName(params.customerName);
         EmailValidator.validateUrl(params.claimLink, 'claimLink');
         EmailValidator.validateExpiresInHours(params.expiresInHours);
+    }
+
+    /**
+     * Validate 2FA setup email input parameters
+     */
+    private static validateTwoFactorInput(params: TwoFactorSetupEmail): void {
+        EmailValidator.validateEmail(params.to, 'to');
+        if (!params.userName || params.userName.trim() === '') {
+            throw new EmailValidationError('userName is required');
+        }
+        if (!params.qrCodeDataUrl || params.qrCodeDataUrl.trim() === '') {
+            throw new EmailValidationError('qrCodeDataUrl is required');
+        }
+        if (!params.secret || params.secret.trim() === '') {
+            throw new EmailValidationError('secret is required');
+        }
     }
 
     /**
@@ -663,6 +687,277 @@ export class EmailService {
               <div class="footer">
                 <p style="margin: 0;">© ${new Date().getFullYear()} Crashify. All rights reserved.</p>
                 <p style="margin: 5px 0 0 0;">This is an automated message. Please do not reply to this email.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+    }
+
+    /**
+     * Send 2FA setup instructions via email with QR code
+     *
+     * @param params - Email parameters including QR code
+     * @returns Promise resolving to SendEmailResult with success status and details
+     * @throws EmailServiceError for various error conditions
+     */
+    static async sendTwoFactorSetup(
+        params: TwoFactorSetupEmail
+    ): Promise<SendEmailResult> {
+        const startTime = Date.now();
+
+        try {
+            // Validate input
+            this.validateTwoFactorInput(params);
+
+            const config = EmailConfigManager.getConfig();
+            const { to, userName, qrCodeDataUrl, secret, otpauthUrl } = params;
+
+            // Sanitize inputs for XSS prevention
+            const sanitizedUserName = HtmlSanitizer.escapeHtml(userName);
+
+            this.log('info', {
+                message: 'Sending 2FA setup email',
+                to: to.substring(0, 3) + '***', // Partial email for privacy
+                userName: sanitizedUserName,
+            });
+
+            // Execute with retry logic
+            const result = await RetryManager.executeWithRetry(
+                async () => {
+                    const client = this.getResendClient();
+                    const response = await client.emails.send({
+                        from: config.fromEmail,
+                        to,
+                        subject: 'Set Up Two-Factor Authentication - CarInsure Admin',
+                        html: this.getTwoFactorSetupTemplate(
+                            sanitizedUserName,
+                            qrCodeDataUrl,
+                            secret,
+                            otpauthUrl
+                        ),
+                    });
+
+                    // Handle Resend API response
+                    if (response.error) {
+                        const errorMessage =
+                            response.error.message ||
+                            'Unknown Resend API error';
+                        const statusCode = response.error.statusCode;
+                        const isRetryable = Boolean(
+                            statusCode &&
+                                (statusCode >= 500 || statusCode === 429)
+                        );
+
+                        throw new EmailServiceError(
+                            `Resend API error: ${errorMessage}`,
+                            statusCode === 429
+                                ? EmailErrorCode.RATE_LIMIT_ERROR
+                                : EmailErrorCode.API_ERROR,
+                            response.error,
+                            isRetryable
+                        );
+                    }
+
+                    return response.data;
+                },
+                config.maxRetries,
+                config.retryDelayMs,
+                'sendTwoFactorSetup'
+            );
+
+            const duration = Date.now() - startTime;
+
+            this.log('info', {
+                message: '2FA setup email sent successfully',
+                to: to.substring(0, 3) + '***',
+                messageId: result?.id,
+                durationMs: duration,
+            });
+
+            return {
+                success: true,
+                messageId: result?.id,
+            };
+        } catch (error) {
+            const duration = Date.now() - startTime;
+
+            if (error instanceof EmailServiceError) {
+                this.log('error', {
+                    message: 'Failed to send 2FA setup email',
+                    error: error.message,
+                    code: error.code,
+                    durationMs: duration,
+                });
+                throw error;
+            }
+
+            this.log('error', {
+                message: 'Unexpected error sending 2FA setup email',
+                error:
+                    error instanceof Error ? error.message : 'Unknown error',
+                durationMs: duration,
+            });
+
+            throw new EmailServiceError(
+                'Failed to send 2FA setup email',
+                EmailErrorCode.UNKNOWN_ERROR,
+                error,
+                false
+            );
+        }
+    }
+
+    /**
+     * Generate HTML email template for 2FA setup with QR code
+     */
+    private static getTwoFactorSetupTemplate(
+        userName: string,
+        qrCodeDataUrl: string,
+        secret: string,
+        otpauthUrl: string
+    ): string {
+        return `
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+                line-height: 1.6; 
+                color: #333; 
+                margin: 0;
+                padding: 0;
+                background-color: #f4f6f8;
+              }
+              .container { 
+                max-width: 600px; 
+                margin: 0 auto; 
+                padding: 20px; 
+                background-color: #ffffff;
+              }
+              .header { 
+                background: linear-gradient(135deg, #F59E0B 0%, #DC2626 100%); 
+                color: white; 
+                padding: 30px; 
+                text-align: center; 
+                border-radius: 8px 8px 0 0;
+              }
+              .content { 
+                padding: 30px; 
+                background: #f9fafb; 
+              }
+              .qr-container {
+                text-align: center;
+                padding: 20px;
+                background: white;
+                border-radius: 8px;
+                margin: 20px 0;
+                border: 2px solid #E5E7EB;
+              }
+              .qr-code {
+                max-width: 250px;
+                height: auto;
+                margin: 0 auto;
+                display: block;
+              }
+              .secret-box {
+                background: #F3F4F6;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding: 15px;
+                margin: 20px 0;
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+                word-break: break-all;
+                text-align: center;
+                color: #1F2937;
+              }
+              .steps {
+                background: #FEF3C7;
+                border-left: 4px solid #F59E0B;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 4px;
+              }
+              .steps ol {
+                margin: 10px 0;
+                padding-left: 25px;
+              }
+              .steps li {
+                margin: 8px 0;
+              }
+              .warning { 
+                background: #FEE2E2; 
+                border-left: 4px solid #DC2626; 
+                padding: 15px; 
+                margin: 20px 0; 
+                border-radius: 4px;
+              }
+              .footer { 
+                padding: 20px; 
+                text-align: center; 
+                color: #6B7280; 
+                font-size: 12px; 
+                background: #ffffff;
+                border-radius: 0 0 8px 8px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1 style="margin: 0; font-size: 24px;">🔐 Two-Factor Authentication Setup</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">CarInsure Admin Portal</p>
+              </div>
+              <div class="content">
+                <p>Hello ${userName},</p>
+                <p>Your CarInsure Admin account has been created with Two-Factor Authentication (2FA) enabled. Please follow the steps below to complete the setup:</p>
+                
+                <div class="qr-container">
+                  <h3 style="margin-top: 0; color: #1F2937;">Scan this QR code with your authenticator app:</h3>
+                  <img src="${qrCodeDataUrl}" alt="2FA QR Code" class="qr-code" />
+                </div>
+
+                <div class="steps">
+                  <h3 style="margin-top: 0; color: #92400E;">Setup Instructions:</h3>
+                  <ol>
+                    <li>Download an authenticator app if you don't have one:
+                      <ul style="margin-top: 5px; padding-left: 20px;">
+                        <li><strong>Google Authenticator</strong> (iOS/Android)</li>
+                        <li><strong>Microsoft Authenticator</strong> (iOS/Android)</li>
+                        <li><strong>Authy</strong> (iOS/Android/Desktop)</li>
+                      </ul>
+                    </li>
+                    <li>Open your authenticator app and tap "Add account" or the "+" button</li>
+                    <li>Scan the QR code above with your phone's camera</li>
+                    <li>Alternatively, manually enter this secret key:
+                      <div class="secret-box">${secret}</div>
+                    </li>
+                    <li>Your authenticator app will now generate 6-digit codes that change every 30 seconds</li>
+                    <li>When logging in, you'll be asked to enter the current code from your app</li>
+                  </ol>
+                </div>
+
+                <div class="warning">
+                  <strong>⚠️ Security Reminders:</strong>
+                  <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>Keep your authenticator app secure - don't share screenshots of your codes</li>
+                    <li>Save your backup codes in a secure location (if provided)</li>
+                    <li>If you lose access to your authenticator app, contact your administrator immediately</li>
+                    <li>Never share your secret key or QR code with anyone</li>
+                  </ul>
+                </div>
+
+                <p>Once you've set up your authenticator app, you can log in to the CarInsure Admin Portal. The system will prompt you for a 6-digit code after you enter your password.</p>
+                
+                <p>If you have any questions or need assistance, please contact your system administrator.</p>
+              </div>
+              <div class="footer">
+                <p style="margin: 0;">© ${new Date().getFullYear()} CarInsure / Crashify. All rights reserved.</p>
+                <p style="margin: 5px 0 0 0;">This is an automated security message. Please do not reply to this email.</p>
               </div>
             </div>
           </body>

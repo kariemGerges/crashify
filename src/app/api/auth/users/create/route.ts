@@ -5,7 +5,12 @@ import {
     validatePasswordStrength,
 } from '@/server/lib/auth/password';
 import { getSession } from '@/server/lib/auth/session';
-import { generateTwoFactorSecret } from '@/server/lib/auth/two-factor';
+import {
+    generateTwoFactorSecret,
+    generateQRCode,
+} from '@/server/lib/auth/two-factor';
+import { EmailService } from '@/server/lib/services/email-service';
+import * as speakeasy from 'speakeasy';
 
 export async function POST(request: NextRequest) {
     try {
@@ -123,6 +128,35 @@ export async function POST(request: NextRequest) {
             },
             ip_address: request.headers.get('x-forwarded-for'),
         });
+
+        // If 2FA is enabled, send setup email automatically
+        if (newUser.two_factor_enabled && twoFactorSecret) {
+            try {
+                // Generate OTP Auth URL
+                const otpauthUrl = speakeasy.otpauthURL({
+                    secret: twoFactorSecret,
+                    label: encodeURIComponent(`CarInsure Admin (${newUser.email})`),
+                    issuer: 'CarInsure',
+                    encoding: 'base32',
+                });
+
+                // Generate QR code
+                const qrCodeDataUrl = await generateQRCode(otpauthUrl);
+
+                // Send email with QR code
+                await EmailService.sendTwoFactorSetup({
+                    to: newUser.email,
+                    userName: name,
+                    qrCodeDataUrl,
+                    secret: twoFactorSecret,
+                    otpauthUrl,
+                });
+            } catch (emailError) {
+                // Log email error but don't fail user creation
+                console.error('Failed to send 2FA setup email:', emailError);
+                // Continue - user can still get QR code via the API endpoint
+            }
+        }
 
         return NextResponse.json(
             {

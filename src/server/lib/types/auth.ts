@@ -7,6 +7,7 @@ export interface User {
     role: Role;
     twoFactorEnabled: boolean;
     lastLogin?: string;
+    isActive?: boolean;
 }
 
 export interface Session {
@@ -24,4 +25,11 @@ export interface LoginCredentials {
 export interface TwoFactorVerification {
     code: string;
     tempToken: string;
+}
+
+export interface AuthState {
+    user?: User;
+    isAuthenticated?: boolean;
+    requiresTwoFactor?: boolean;
+    tempToken?: string;
 }

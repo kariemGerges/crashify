@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import Footer from '@/app/components/Footer';
-import Header from './components/Header';
-import ChatBot from './components/ChatBot';
+// import Footer from '@/app/components/Footer';
+// import Header from './components/Header';
+// import ChatBot from './components/ChatBot';
 import Script from 'next/script';
 
 const geistSans = Geist({
@@ -94,10 +94,7 @@ export default function RootLayout({
                 className={`${geistSans.variable} ${geistMono.variable} 
             antialiased min-h-screen flex flex-col bg-white`}
             >
-                <Header />
                 {children}
-                <ChatBot />
-                <Footer />
             </body>
         </html>
     );

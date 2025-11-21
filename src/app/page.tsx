@@ -1,6 +1,9 @@
 import Hero from '@/app/components/HomePage/Hero';
 import WhyChooseUs from './components/HomePage/WhyChooseUs';
 import HowItWorks from './components/HomePage/HowItWorks';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import ChatBot from './components/ChatBot';
 
 export const metadata = {
     title: 'Crashify — AI Vehicle Assessments | Book. Assess. Report in 48 Hours',
@@ -18,7 +21,8 @@ export const metadata = {
 export default function CrashifyLayout() {
     return (
         <div>
-            {/* Main Content Area (Demo) */}
+            {/* Main Content Area */}
+            <Header />
             <main className="flex-grow bg-[#f8f9fa]">
                 <section>
                     <Hero />
@@ -30,6 +34,8 @@ export default function CrashifyLayout() {
                     <HowItWorks />
                 </section>
             </main>
+            <ChatBot />
+            <Footer />
         </div>
     );
 }

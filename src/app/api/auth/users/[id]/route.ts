@@ -6,7 +6,7 @@ import { hashPassword } from '@/server/lib/auth/password';
 // Update user
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const currentUser = await getSession();
@@ -26,7 +26,7 @@ export async function PATCH(
         }
 
         const { name, role, isActive, password } = await request.json();
-        const userId = params.id;
+        const { id: userId } = await params;
 
         // Build update object
         const updates: any = {};
@@ -87,7 +87,7 @@ export async function PATCH(
 // Delete user (soft delete by setting is_active to false)
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const currentUser = await getSession();
@@ -106,7 +106,7 @@ export async function DELETE(
             );
         }
 
-        const userId = params.id;
+        const { id: userId } = await params;
 
         // Prevent self-deletion
         if (userId === currentUser.id) {
