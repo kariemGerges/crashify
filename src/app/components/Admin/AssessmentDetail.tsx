@@ -19,6 +19,8 @@ import {
     XCircle,
 } from 'lucide-react';
 import type { Json } from '@/server/lib/types/database.types';
+import Image from 'next/image';
+
 
 interface OwnerInfo {
     firstName?: string;
@@ -138,8 +140,8 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
                 setAssessment(assessmentData);
                 setNewStatus(assessmentData.status);
             }
-        } catch (err: any) {
-            setError(err.message || 'Failed to load assessment');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to load assessment');
         } finally {
             setLoading(false);
         }
@@ -179,8 +181,8 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
             setAssessment({ ...assessment, status: newStatus });
             setShowStatusEdit(false);
             if (onUpdate) onUpdate();
-        } catch (err: any) {
-            alert(err.message || 'Failed to update status');
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Failed to update status');
         } finally {
             setUpdating(false);
         }
@@ -205,8 +207,8 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
             alert('Assessment deleted successfully');
             if (onUpdate) onUpdate();
             onClose();
-        } catch (err: any) {
-            alert(err.message || 'Failed to delete assessment');
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Failed to delete assessment');
         } finally {
             setUpdating(false);
         }
@@ -237,8 +239,8 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
 
             alert(`Successfully uploaded ${result.uploaded} file(s)`);
             loadFiles();
-        } catch (err: any) {
-            alert(err.message || 'Failed to upload files');
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Failed to upload files');
         } finally {
             setUploading(false);
         }
@@ -376,7 +378,7 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
                                 <div className="flex items-center gap-2">
                                     <select
                                         value={newStatus}
-                                        onChange={(e) => setNewStatus(e.target.value as any)}
+                                        onChange={(e) => setNewStatus(e.target.value as 'pending' | 'processing' | 'completed' | 'cancelled')}
                                         className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
                                     >
                                         <option value="pending">Pending</option>
@@ -810,10 +812,11 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
                                     >
                                         <div className="aspect-square bg-gray-800 rounded-lg mb-2 flex items-center justify-center overflow-hidden">
                                             {file.file_type.startsWith('image/') ? (
-                                                <img
+                                                <Image
                                                     src={file.file_url}
                                                     alt={file.file_name}
-                                                    className="w-full h-full object-cover"
+                                                    width={100}
+                                                    height={100}
                                                 />
                                             ) : (
                                                 <FileText className="w-8 h-8 text-gray-500" />

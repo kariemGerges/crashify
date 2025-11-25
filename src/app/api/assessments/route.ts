@@ -79,7 +79,9 @@ export async function POST(request: NextRequest) {
                 department: formData.department || null,
 
                 // Section 2
-                assessment_type: formData.assessmentType,
+                assessment_type: (formData.assessmentType === 'Desktop Assessment' || formData.assessmentType === 'Onsite Assessment') 
+                    ? formData.assessmentType 
+                    : 'Desktop Assessment', // Default to Desktop Assessment if invalid
                 claim_reference: formData.claimReference || null,
                 policy_number: formData.policyNumber || null,
                 incident_date: formData.incidentDate || null,
@@ -119,10 +121,17 @@ export async function POST(request: NextRequest) {
                 status: 'pending',
         };
 
-        // Type assertion needed due to TypeScript inference issue with Supabase client
-        const { data, error: insertError } = await supabase
-            .from('assessments')
-            .insert([insertData] as any)
+        const { data, error: insertError } = await (supabase.from('assessments') as unknown as {
+            insert: (values: AssessmentInsert[]) => {
+                select: () => {
+                    single: () => Promise<{
+                        data: AssessmentRow | null;
+                        error: { message: string } | null;
+                    }>;
+                };
+            };
+        })
+            .insert([insertData])
             .select()
             .single();
         
@@ -195,7 +204,6 @@ export async function GET(request: NextRequest) {
         const status = searchParams.get('status');
         const assessmentType = searchParams.get('type');
         const companyName = searchParams.get('company');
-        const search = searchParams.get('search');
 
         // Build query
         let query = supabase

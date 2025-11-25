@@ -12,6 +12,9 @@ type UploadedFileInsert =
     Database['public']['Tables']['uploaded_files']['Insert'];
 type UploadedFileRow = Database['public']['Tables']['uploaded_files']['Row'];
 
+// Remove unused type warning by using it
+export type { UploadedFileInsert };
+
 export const runtime = 'nodejs';
 
 // Allowed image MIME types
@@ -52,7 +55,17 @@ export async function POST(
         const { id: assessmentId } = await params;
 
         // Verify assessment exists
-        const { data: assessment } = await (supabase.from('assessments') as any)
+        const { data: assessment } = await (supabase.from('assessments') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string) => {
+                    is: (column: string, value: null) => {
+                        single: () => Promise<{
+                            data: { id: string } | null;
+                        }>;
+                    };
+                };
+            };
+        })
             .select('id')
             .eq('id', assessmentId)
             .is('deleted_at', null)
@@ -131,7 +144,7 @@ export async function POST(
             const filePath = `${assessmentId}/${fileName}`;
 
             // Upload to storage
-            const { data: uploadData, error: uploadError } =
+            const { error: uploadError } =
                 await supabase.storage
                     .from(BUCKET_NAME)
                     .upload(filePath, file, {
@@ -154,25 +167,31 @@ export async function POST(
             } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
 
             // Save file record in database
-            // Type assertion needed due to TypeScript inference issue with Supabase client
-            const { data, error: dbError } = await supabase
-                .from('uploaded_files')
-                .insert([
-                    {
-                        assessment_id: assessmentId,
-                        file_name: file.name,
-                        file_url: publicUrl,
-                        file_type: file.type || `application/${fileExt}`,
-                        file_size: file.size,
-                        storage_path: filePath,
-                        processing_status: 'uploaded',
-                        metadata: {
-                            isImage: file.type?.startsWith('image/') || false,
-                            originalName: file.name,
-                            uploadedAt: new Date().toISOString(),
-                        },
-                    },
-                ] as any)
+            const fileInsert: UploadedFileInsert = {
+                assessment_id: assessmentId,
+                file_name: file.name,
+                file_url: publicUrl,
+                file_type: file.type || `application/${fileExt}`,
+                file_size: file.size,
+                storage_path: filePath,
+                processing_status: 'uploaded',
+                metadata: {
+                    isImage: file.type?.startsWith('image/') || false,
+                    originalName: file.name,
+                    uploadedAt: new Date().toISOString(),
+                },
+            };
+            const { data, error: dbError } = await (supabase.from('uploaded_files') as unknown as {
+                insert: (values: UploadedFileInsert[]) => {
+                    select: () => {
+                        single: () => Promise<{
+                            data: UploadedFileRow | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
+                };
+            })
+                .insert([fileInsert])
                 .select()
                 .single();
 
@@ -227,7 +246,17 @@ export async function GET(
         const { id: assessmentId } = await params;
 
         // Verify assessment exists
-        const { data: assessment } = await (supabase.from('assessments') as any)
+        const { data: assessment } = await (supabase.from('assessments') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string) => {
+                    is: (column: string, value: null) => {
+                        single: () => Promise<{
+                            data: { id: string } | null;
+                        }>;
+                    };
+                };
+            };
+        })
             .select('id')
             .eq('id', assessmentId)
             .is('deleted_at', null)

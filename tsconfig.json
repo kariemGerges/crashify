@@ -23,5 +23,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/server/api/sendEmail"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "scripts"]
 }

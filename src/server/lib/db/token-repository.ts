@@ -9,6 +9,7 @@ import { ClaimToken, CreateTokenRequest } from '@/server/lib/types/claim-token';
 import { TokenGenerator } from '@/server/lib/token/generator';
 import { prisma } from '@/server/lib/db/client';
 import { Prisma } from '@/generated/prisma/client';
+import type { Json } from '@/server/lib/types/database.types';
 
 /**
  * Prisma ClaimToken model type
@@ -69,7 +70,7 @@ export class TokenRepository {
                     policyNumber: request.policyNumber,
                     expiresAt,
                     claimType: request.claimType,
-                    metadata: request.metadata,
+                    metadata: request.metadata ? (request.metadata as Prisma.InputJsonValue) : undefined,
                 },
             });
 

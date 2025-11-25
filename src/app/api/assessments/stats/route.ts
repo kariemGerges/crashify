@@ -3,7 +3,7 @@
 // GET: Get assessment statistics
 // =============================================
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServerClient } from '@/server/lib/supabase/client'
 import type { Database } from '@/server/lib/types/database.types'
 import { unstable_cache } from 'next/cache'
@@ -19,20 +19,30 @@ const getCachedStats = unstable_cache(
     const supabase = createServerClient()
 
     // Get counts by status
-    // Type assertion needed due to TypeScript inference issue with Supabase client
     const { data: statusDataRaw } = await (supabase
-      .from('assessments') as any)
+      .from('assessments') as unknown as {
+        select: (columns: string) => {
+          is: (column: string, value: null) => Promise<{
+            data: StatusData | null;
+          }>;
+        };
+      })
       .select('status')
       .is('deleted_at', null)
-    const statusData = statusDataRaw as StatusData | null
+    const statusData = statusDataRaw
 
     // Get counts by type
-    // Type assertion needed due to TypeScript inference issue with Supabase client
     const { data: typeDataRaw } = await (supabase
-      .from('assessments') as any)
+      .from('assessments') as unknown as {
+        select: (columns: string) => {
+          is: (column: string, value: null) => Promise<{
+            data: TypeData | null;
+          }>;
+        };
+      })
       .select('assessment_type')
       .is('deleted_at', null)
-    const typeData = typeDataRaw as TypeData | null
+    const typeData = typeDataRaw
 
     // Get recent submissions (last 7 days)
     const sevenDaysAgo = new Date()
@@ -69,7 +79,7 @@ const getCachedStats = unstable_cache(
   }
 )
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const stats = await getCachedStats()
     return NextResponse.json({ data: stats })

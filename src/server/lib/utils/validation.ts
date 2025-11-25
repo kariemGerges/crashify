@@ -76,7 +76,7 @@ export function validateAssessmentForm(
     if (!data.model?.trim()) {
         errors.push({ field: 'model', message: 'Vehicle model is required' });
     }
-    if (data.year && (data.year < 1900 || data.year > 2026)) {
+    if (data.year && (Number(data.year) < 1900 || Number(data.year) > 2026)) {
         errors.push({
             field: 'year',
             message: 'Year must be between 1900 and 2026',

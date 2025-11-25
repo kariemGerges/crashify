@@ -16,7 +16,7 @@ export interface ClaimToken {
     claimType?: string;
     ipAddress?: string;
     userAgent?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }
 
 export interface TokenValidationResponse {
@@ -33,5 +33,5 @@ export interface CreateTokenRequest {
     policyNumber?: string;
     claimType?: string;
     expiresInHours?: number; // Default 48
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }

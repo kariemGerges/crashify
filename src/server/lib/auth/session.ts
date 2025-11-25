@@ -25,9 +25,11 @@ export async function createSession(
         ip_address: ipAddress ?? null,
         user_agent: userAgent ?? null,
     };
-    const { error } = await (supabase.from('sessions') as any).insert(
-        sessionData
-    );
+    const { error } = await (supabase.from('sessions') as unknown as {
+        insert: (values: SessionInsert) => Promise<{
+            error: { message: string } | null;
+        }>;
+    }).insert(sessionData);
 
     if (error) throw new Error('Failed to create session');
 
@@ -43,7 +45,11 @@ export async function createSession(
 
     // Update last login
     const userUpdate: UserUpdate = { last_login: new Date().toISOString() };
-    await (supabase.from('users') as any).update(userUpdate).eq('id', userId);
+    await (supabase.from('users') as unknown as {
+        update: (values: UserUpdate) => {
+            eq: (column: string, value: string) => Promise<unknown>;
+        };
+    }).update(userUpdate).eq('id', userId);
 
     return token;
 }
@@ -54,7 +60,16 @@ export async function getSession(): Promise<User | null> {
 
     if (!token) return null;
 
-    const { data: session, error } = await (supabase.from('sessions') as any)
+    const { data: session, error } = await (supabase.from('sessions') as unknown as {
+        select: (columns: string) => {
+            eq: (column: string, value: string) => {
+                single: () => Promise<{
+                    data: Database['public']['Tables']['sessions']['Row'] & { users: Database['public']['Tables']['users']['Row'] } | null;
+                    error: { message: string } | null;
+                }>;
+            };
+        };
+    })
         .select('*, users(*)')
         .eq('token', token)
         .single();
@@ -74,7 +89,7 @@ export async function getSession(): Promise<User | null> {
         name: user.name,
         role: user.role,
         twoFactorEnabled: user.two_factor_enabled,
-        lastLogin: user.last_login,
+        lastLogin: user.last_login ?? undefined,
     };
 }
 
@@ -83,7 +98,11 @@ export async function deleteSession(token?: string): Promise<void> {
     const sessionToken = token || cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
     if (sessionToken) {
-        await (supabase.from('sessions') as any)
+        await (supabase.from('sessions') as unknown as {
+            delete: () => {
+                eq: (column: string, value: string) => Promise<unknown>;
+            };
+        })
             .delete()
             .eq('token', sessionToken);
     }
@@ -100,7 +119,9 @@ export async function createTempToken(userId: string): Promise<string> {
         token,
         expires_at: expiresAt.toISOString(),
     };
-    await (supabase.from('sessions') as any).insert(tempSessionData);
+    await (supabase.from('sessions') as unknown as {
+        insert: (values: SessionInsert) => Promise<unknown>;
+    }).insert(tempSessionData);
 
     return token;
 }

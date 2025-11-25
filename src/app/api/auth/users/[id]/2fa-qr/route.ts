@@ -3,10 +3,11 @@ import { supabase } from '@/server/lib/supabase/client';
 import { getSession } from '@/server/lib/auth/session';
 import { generateQRCode } from '@/server/lib/auth/two-factor';
 import * as speakeasy from 'speakeasy';
+import type { Database } from '@/server/lib/types/database.types';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         // Check if user is authenticated and is admin
@@ -26,10 +27,19 @@ export async function GET(
             );
         }
 
-        const userId = params.id;
+        const { id: userId } = await params;
 
         // Get user from database
-        const { data: user, error } = await (supabase.from('users') as any)
+        const { data: user, error } = await (supabase.from('users') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string) => {
+                    single: () => Promise<{
+                        data: Database['public']['Tables']['users']['Row'] & { two_factor_secret: string | null } | null;
+                        error: { message: string } | null;
+                    }>;
+                };
+            };
+        })
             .select('*')
             .eq('id', userId)
             .single();

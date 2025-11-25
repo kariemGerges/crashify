@@ -1,6 +1,8 @@
 // Two-Factor Authentication Setup Modal Component
 import React, { useState } from 'react';
 import { X, Copy, Check, Download, Mail } from 'lucide-react';
+import Image from 'next/image';
+
 
 export interface TwoFactorSetupData {
     qrCode: string;
@@ -95,11 +97,26 @@ export const TwoFactorSetupModal: React.FC<{
                             Setup Instructions:
                         </h3>
                         <ol className="list-decimal list-inside space-y-1 text-sm text-gray-300">
-                            <li>Download an authenticator app (Google Authenticator, Microsoft Authenticator, or Authy)</li>
-                            <li>Open the app and tap "Add account" or the "+" button</li>
-                            <li>Scan the QR code below with your phone's camera</li>
-                            <li>Alternatively, manually enter the secret key shown below</li>
-                            <li>The app will generate 6-digit codes for login</li>
+                            <li>
+                                Download an authenticator app (Google
+                                Authenticator, Microsoft Authenticator, or
+                                Authy)
+                            </li>
+                            <li>
+                                Open the app and tap &quot;Add account&quot; or
+                                the &quot;+&quot; button
+                            </li>
+                            <li>
+                                Scan the QR code below with your phone&apos;s
+                                camera
+                            </li>
+                            <li>
+                                Alternatively, manually enter the secret key
+                                shown below
+                            </li>
+                            <li>
+                                The app will generate 6-digit codes for login
+                            </li>
                         </ol>
                     </div>
 
@@ -109,10 +126,11 @@ export const TwoFactorSetupModal: React.FC<{
                             Scan this QR code:
                         </h3>
                         <div className="bg-white p-4 rounded-lg">
-                            <img
+                            <Image
                                 src={data.qrCode}
                                 alt="2FA QR Code"
-                                className="w-64 h-64"
+                                width={256}
+                                height={256}
                             />
                         </div>
                         <button
@@ -160,7 +178,8 @@ export const TwoFactorSetupModal: React.FC<{
                                     Send Setup Email
                                 </h3>
                                 <p className="text-sm text-gray-400">
-                                    Email the QR code and instructions to {data.email}
+                                    Email the QR code and instructions to{' '}
+                                    {data.email}
                                 </p>
                             </div>
                             <button
@@ -176,7 +195,9 @@ export const TwoFactorSetupModal: React.FC<{
                                 ) : (
                                     <>
                                         <Mail className="w-4 h-4" />
-                                        {sendingEmail ? 'Sending...' : 'Send Email'}
+                                        {sendingEmail
+                                            ? 'Sending...'
+                                            : 'Send Email'}
                                     </>
                                 )}
                             </button>
@@ -190,8 +211,11 @@ export const TwoFactorSetupModal: React.FC<{
                         </h3>
                         <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
                             <li>Keep the QR code and secret key secure</li>
-                            <li>Don't share screenshots of the QR code</li>
-                            <li>If the user loses access, contact an administrator</li>
+                            <li>Don&apos;t share screenshots of the QR code</li>
+                            <li>
+                                If the user loses access, contact an
+                                administrator
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -208,4 +232,3 @@ export const TwoFactorSetupModal: React.FC<{
         </div>
     );
 };
-

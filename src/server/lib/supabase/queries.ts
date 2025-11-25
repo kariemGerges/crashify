@@ -3,13 +3,13 @@
 // Optimized database queries with caching
 // =============================================
 
-import { cache } from 'react';
+// import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { supabase } from '@/server/lib/supabase/client';
 import type { Database } from '@/server/lib/types/database.types';
 
 type Assessment = Database['public']['Tables']['assessments']['Row'];
-type UploadedFileRow = Database['public']['Tables']['uploaded_files']['Row'];
+// type UploadedFileRow = Database['public']['Tables']['uploaded_files']['Row'];
 
 // Cache assessment by ID (5 minutes cache)
 export const getAssessmentById = unstable_cache(
@@ -87,7 +87,12 @@ export const getAssessmentsByCompany = unstable_cache(
 
 export async function searchAssessments(query: string): Promise<Assessment[]> {
     // const { data, error } = await supabase.rpc('search_assessments');
-    const { data, error } = await (supabase.rpc as any)('search_assessments', { search_query: query });
+    const { data, error } = await (supabase.rpc as unknown as {
+        (functionName: 'search_assessments', args: { search_query: string }): Promise<{
+            data: Assessment[] | null;
+            error: { message: string } | null;
+        }>;
+    })('search_assessments', { search_query: query });
     if (error) throw error;
     return data as Assessment[];
 }

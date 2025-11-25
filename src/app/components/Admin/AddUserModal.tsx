@@ -57,7 +57,7 @@ export const AddUserModal: React.FC<{
                         otpauthUrl: qrResult.otpauthUrl,
                     });
                     setShowQRModal(true);
-                } catch (qrError: any) {
+                } catch (qrError: unknown) {
                     console.error('Failed to get QR code:', qrError);
                     // Still show success, but without QR code
                     onSuccess();
@@ -67,8 +67,8 @@ export const AddUserModal: React.FC<{
                 onSuccess();
                 onClose();
             }
-        } catch (err: any) {
-            setError(err.message || 'Failed to create user. Please try again.');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to create user. Please try again.');
         } finally {
             setLoading(false);
         }

@@ -70,8 +70,8 @@ export const TwoFactorAuth: React.FC<{
             if (result.user) {
                 onVerifySuccess(result.user);
             }
-        } catch (err: any) {
-            setError(err.message || 'Invalid 2FA code. Please try again.');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Invalid 2FA code. Please try again.');
             setCode(['', '', '', '', '', '']);
             document.getElementById('code-0')?.focus();
         } finally {

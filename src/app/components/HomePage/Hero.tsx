@@ -2,14 +2,10 @@ import Image from 'next/image';
 import carImage from '../../../../public/heroCar.png';
 import TakeSpin from '../TakeSpin';
 import StatCard from '@/app/components/HomePage/animated-stats-cards';
-export default function CrashifyHero() {
-    const scrollToSection = (id: string) => {
-        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    };
 
+export default function CrashifyHero() {
     return (
         <section className="relative min-h-screen bg-black overflow-hidden">
-            
             {/* Subtle animated background */}
             <div className="absolute inset-0 opacity-10">
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full filter blur-3xl animate-pulse"></div>
@@ -17,7 +13,6 @@ export default function CrashifyHero() {
             </div>
 
             <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
-
                 {/* Top Title */}
                 <div className="text-center mb-6 sm:mb-8 lg:mb-12">
                     <h1 className="text-white text-2xl sm:text-base lg:text-4xl font-light tracking-widest mb-2">

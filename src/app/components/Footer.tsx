@@ -106,6 +106,14 @@ export default function Footer() {
                                     Careers
                                 </a>
                             </li>
+                            <li>
+                                <Link
+                                    href="/pages/admin"
+                                    className="text-gray-400 hover:text-red-800 transition-colors"
+                                >
+                                    X
+                                </Link>
+                            </li>
                         </ul>
                     </div>
 

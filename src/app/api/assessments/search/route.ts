@@ -27,11 +27,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Use full-text search function
-    // Type assertion needed due to TypeScript inference issue with Supabase client
-    const { data, error } = await (supabase.rpc as any)(
+    const { data, error } = await (supabase.rpc as unknown as {
+      (functionName: 'search_assessments', args: { search_query: string }): Promise<{
+        data: SearchAssessmentsReturns | null;
+        error: { message: string } | null;
+      }>;
+    })(
       'search_assessments',
       { search_query: query.trim() }
-    ) as { data: SearchAssessmentsReturns | null; error: any }
+    )
 
     if (error) {
       return NextResponse.json(

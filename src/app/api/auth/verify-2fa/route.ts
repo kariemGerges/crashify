@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/server/lib/supabase/client';
 import { verifyTwoFactorToken } from '@/server/lib/auth/two-factor';
 import { createSession } from '@/server/lib/auth/session';
+import type { Database } from '@/server/lib/types/database.types';
 
 export async function POST(request: NextRequest) {
     try {
@@ -15,9 +16,16 @@ export async function POST(request: NextRequest) {
         }
 
         // Verify temp token
-        const { data: session, error } = await (
-            supabase.from('sessions') as any
-        )
+        const { data: session, error } = await (supabase.from('sessions') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string) => {
+                    single: () => Promise<{
+                        data: Database['public']['Tables']['sessions']['Row'] & { users: Database['public']['Tables']['users']['Row'] } | null;
+                        error: { message: string } | null;
+                    }>;
+                };
+            };
+        })
             .select('*, users(*)')
             .eq('token', tempToken)
             .single();
@@ -31,7 +39,11 @@ export async function POST(request: NextRequest) {
 
         // Check expiration
         if (new Date(session.expires_at) < new Date()) {
-            await (supabase.from('sessions') as any)
+            await (supabase.from('sessions') as unknown as {
+                delete: () => {
+                    eq: (column: string, value: string) => Promise<unknown>;
+                };
+            })
                 .delete()
                 .eq('token', tempToken);
             return NextResponse.json(
@@ -40,17 +52,26 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const user = session.users;
+        const user = session.users as Database['public']['Tables']['users']['Row'] & { two_factor_secret: string | null };
 
         // Verify 2FA code
+        if (!user.two_factor_secret) {
+            return NextResponse.json(
+                { error: '2FA is not configured for this user' },
+                { status: 400 }
+            );
+        }
         const isValid = verifyTwoFactorToken(code, user.two_factor_secret);
 
         if (!isValid) {
-            await (supabase.from('audit_logs') as any).insert({
-                user_id: user.id,
+            const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
+                changed_by: user.id,
                 action: '2fa_failed',
                 ip_address: request.headers.get('x-forwarded-for'),
-            });
+            };
+            await (supabase.from('audit_logs') as unknown as {
+                insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
+            }).insert(auditLogInsert);
 
             return NextResponse.json(
                 { error: 'Invalid 2FA code' },
@@ -59,7 +80,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Delete temp token
-        await (supabase.from('sessions') as any)
+        await (supabase.from('sessions') as unknown as {
+            delete: () => {
+                eq: (column: string, value: string) => Promise<unknown>;
+            };
+        })
             .delete()
             .eq('token', tempToken);
 
@@ -74,11 +99,14 @@ export async function POST(request: NextRequest) {
         );
 
         // Log successful 2FA
-        await (supabase.from('audit_logs') as any).insert({
-            user_id: user.id,
+        const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
+            changed_by: user.id,
             action: '2fa_success',
             ip_address: ipAddress,
-        });
+        };
+        await (supabase.from('audit_logs') as unknown as {
+            insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
+        }).insert(auditLogInsert);
 
         return NextResponse.json({
             user: {

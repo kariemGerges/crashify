@@ -55,8 +55,8 @@ export const ClaimsTab: React.FC = () => {
             } else {
                 setError('Failed to load claims');
             }
-        } catch (err: any) {
-            setError(err.message || 'Failed to load claims');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to load claims');
         } finally {
             setLoading(false);
         }

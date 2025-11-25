@@ -7,7 +7,6 @@ const BUCKET_NAME = 'assessment-photos';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 import { supabase } from '@/server/lib/supabase/client';
 
-
 export interface UploadResult {
     path: string;
     url: string;
@@ -16,8 +15,7 @@ export interface UploadResult {
 
 export async function uploadFile(
     assessmentId: string,
-    file: File,
-    onProgress?: (progress: number) => void
+    file: File
 ): Promise<UploadResult> {
     try {
         // Validate file size
@@ -64,17 +62,12 @@ export async function uploadFile(
 
 export async function uploadMultipleFiles(
     assessmentId: string,
-    files: File[],
-    onProgress?: (fileIndex: number, progress: number) => void
+    files: File[]
 ): Promise<UploadResult[]> {
     const results: UploadResult[] = [];
 
     for (let i = 0; i < files.length; i++) {
-        const result = await uploadFile(
-            assessmentId,
-            files[i],
-            onProgress ? (progress) => onProgress(i, progress) : undefined
-        );
+        const result = await uploadFile(assessmentId, files[i]);
         results.push(result);
     }
 

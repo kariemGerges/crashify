@@ -28,10 +28,15 @@ export async function GET(
         const { id } = await params;
 
         // Try RPC function first
-        const { data: rpcData, error: rpcError } = (await (supabase.rpc as any)(
+        const { data: rpcData, error: rpcError } = (await (supabase.rpc as unknown as {
+            (functionName: string, args: GetAssessmentFullArgs): Promise<{
+                data: GetAssessmentFullReturns | null;
+                error: { message: string } | null;
+            }>;
+        })(
             'get_assessment_full',
             { assessment_uuid: id }
-        )) as { data: GetAssessmentFullReturns | null; error: any };
+        ));
 
         // If RPC works and returns data, use it
         if (!rpcError && rpcData && rpcData.length > 0) {
@@ -52,9 +57,18 @@ export async function GET(
         }
 
         // Fallback: Query directly from assessments table
-        const { data: assessment, error: assessmentError } = await (
-            supabase.from('assessments') as any
-        )
+        const { data: assessment, error: assessmentError } = await (supabase.from('assessments') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string) => {
+                    is: (column: string, value: null) => {
+                        single: () => Promise<{
+                            data: Database['public']['Tables']['assessments']['Row'] | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
+                };
+            };
+        })
             .select('*')
             .eq('id', id)
             .is('deleted_at', null)
@@ -112,9 +126,20 @@ export async function PATCH(
         delete updates.created_at;
         delete updates.deleted_at;
 
-        // Type assertion needed due to TypeScript inference issue with Supabase client
-        const { data, error } = await (supabase.from('assessments') as any)
-            .update(updates)
+        const updateData: AssessmentUpdate = updates;
+        const { data, error } = await (supabase.from('assessments') as unknown as {
+            update: (values: AssessmentUpdate) => {
+                eq: (column: string, value: string) => {
+                    select: () => {
+                        single: () => Promise<{
+                            data: Database['public']['Tables']['assessments']['Row'] | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
+                };
+            };
+        })
+            .update(updateData)
             .eq('id', id)
             .select()
             .single();
@@ -152,9 +177,15 @@ export async function DELETE(
         const supabase = createServerClient();
         const { id } = await params;
 
-        // Type assertion needed due to TypeScript inference issue with Supabase client
-        const { error } = await (supabase.from('assessments') as any)
-            .update({ deleted_at: new Date().toISOString() })
+        const deleteUpdate: AssessmentUpdate = { deleted_at: new Date().toISOString() };
+        const { error } = await (supabase.from('assessments') as unknown as {
+            update: (values: AssessmentUpdate) => {
+                eq: (column: string, value: string) => Promise<{
+                    error: { message: string } | null;
+                }>;
+            };
+        })
+            .update(deleteUpdate)
             .eq('id', id);
 
         if (error) {

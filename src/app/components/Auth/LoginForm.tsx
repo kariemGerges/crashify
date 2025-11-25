@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { AuthState } from '@/server/lib/types/auth';
 import {
-    Shield,
     Lock,
     Mail,
     AlertCircle,
@@ -44,8 +43,8 @@ export const LoginForm: React.FC<{
             } else if (result.user) {
                 onLoginSuccess({ user: result.user, isAuthenticated: true });
             }
-        } catch (err: any) {
-            setError(err.message || 'Login failed. Please try again.');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
         } finally {
             setLoading(false);
         }

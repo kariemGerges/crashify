@@ -14,6 +14,12 @@ import {
     Loader2,
     Plus,
     Trash2,
+    Key,
+    Copy,
+    Clock,
+    Mail,
+    MessageSquare,
+    X,
 } from 'lucide-react';
 import { AddUserModal } from '@/app/components/Admin/AddUserModal';
 import { api } from '@/app/actions/getUser';
@@ -55,6 +61,41 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     });
     const [loadingStats, setLoadingStats] = useState(false);
 
+    // Claims Tokens state
+    const [tokenFormData, setTokenFormData] = useState({
+        customerEmail: '',
+        customerPhone: '',
+        customerId: '',
+        policyNumber: '',
+        customerName: '',
+        expiresInHours: 48,
+        sendEmail: true,
+        sendSMS: false,
+    });
+    const [generatingToken, setGeneratingToken] = useState(false);
+    const [generatedToken, setGeneratedToken] = useState<{
+        id: string;
+        link: string;
+        expiresAt: string;
+    } | null>(null);
+    const [tokens, setTokens] = useState<
+        Array<{
+            id: string;
+            customerEmail: string;
+            customerPhone: string;
+            customerId: string;
+            policyNumber: string | null;
+            expiresAt: string;
+            isUsed: boolean;
+            usedAt: string | null;
+            createdAt: string;
+            claimType: string | null;
+        }>
+    >([]);
+    const [loadingTokens, setLoadingTokens] = useState(false);
+    const [tokensError, setTokensError] = useState('');
+
+    // Get the color of the role badge
     const getRoleBadgeColor = (role: Role) => {
         switch (role) {
             case 'admin':
@@ -68,6 +109,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         }
     };
 
+    // The menu items for the admin dashboard
     const menuItems = [
         {
             id: 'overview',
@@ -82,6 +124,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             roles: ['admin', 'manager', 'reviewer'],
         },
         {
+            id: 'claims-tokens',
+            icon: FileText,
+            label: 'Claims Tokens',
+            roles: ['admin', 'manager'],
+        },
+        {
             id: 'users',
             icon: Users,
             label: 'Users',
@@ -90,10 +138,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         { id: 'settings', icon: Settings, label: 'Settings', roles: ['admin'] },
     ];
 
+    // Filter the menu items based on the user's role
     const filteredMenuItems = menuItems.filter(item =>
         item.roles.includes(user.role)
     );
 
+    // Load the users for the admin dashboard
     const loadUsers = async () => {
         setLoadingUsers(true);
         setUsersError('');
@@ -105,13 +155,16 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                 (u: User) => u.isActive !== false
             );
             setUsers(activeUsers);
-        } catch (err: any) {
-            setUsersError(err.message || 'Failed to load users');
+        } catch (err: unknown) {
+            setUsersError(
+                err instanceof Error ? err.message : 'Failed to load users'
+            );
         } finally {
             setLoadingUsers(false);
         }
     };
 
+    // Load the stats for the admin dashboard
     const loadStats = async () => {
         setLoadingStats(true);
         try {
@@ -120,13 +173,14 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             if (result.data) {
                 setApiData(result.data);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Failed to load stats:', err);
         } finally {
             setLoadingStats(false);
         }
     };
 
+    // Handle the delete user action
     const handleDeleteUser = (userId: string, userName: string) => {
         setDeleteConfirm({
             isOpen: true,
@@ -135,6 +189,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         });
     };
 
+    // Confirm the delete user action
     const confirmDeleteUser = async () => {
         if (!deleteConfirm.userId) return;
 
@@ -151,17 +206,21 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             toast.showSuccess('User deleted successfully');
             // Optionally reload to ensure sync, but user is already removed from UI
             // loadUsers();
-        } catch (err: any) {
+        } catch (err: unknown) {
             // If deletion fails, reload the list to restore the user
-            toast.showError(err.message || 'Failed to delete user');
+            toast.showError(
+                err instanceof Error ? err.message : 'Failed to delete user'
+            );
             loadUsers();
         }
     };
 
+    // Cancel the delete user action
     const cancelDeleteUser = () => {
         setDeleteConfirm({ isOpen: false, userId: null, userName: '' });
     };
 
+    // Handle the logout action
     const handleLogout = async () => {
         try {
             await api.logout();
@@ -172,6 +231,95 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         }
     };
 
+    // Load tokens list
+    const loadTokens = async () => {
+        setLoadingTokens(true);
+        setTokensError('');
+
+        try {
+            const response = await fetch('/api/admin/tokens/generate/list');
+            const result = await response.json();
+
+            if (result.tokens) {
+                setTokens(result.tokens);
+            } else {
+                setTokensError('Failed to load tokens');
+            }
+        } catch (err: unknown) {
+            setTokensError(
+                err instanceof Error ? err.message : 'Failed to load tokens'
+            );
+        } finally {
+            setLoadingTokens(false);
+        }
+    };
+
+    // Generate token
+    const handleGenerateToken = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setGeneratingToken(true);
+        setGeneratedToken(null);
+
+        try {
+            const response = await fetch('/api/admin/tokens/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customerEmail: tokenFormData.customerEmail,
+                    customerPhone: tokenFormData.customerPhone,
+                    customerId: tokenFormData.customerId,
+                    policyNumber: tokenFormData.policyNumber || undefined,
+                    expiresInHours: tokenFormData.expiresInHours,
+                    metadata: {
+                        customerName: tokenFormData.customerName || undefined,
+                        sendEmail: tokenFormData.sendEmail,
+                        sendSMS: tokenFormData.sendSMS,
+                    },
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to generate token');
+            }
+
+            setGeneratedToken({
+                id: result.token.id,
+                link: result.link,
+                expiresAt: result.token.expiresAt,
+            });
+
+            // Reset form
+            setTokenFormData({
+                customerEmail: '',
+                customerPhone: '',
+                customerId: '',
+                policyNumber: '',
+                customerName: '',
+                expiresInHours: 48,
+                sendEmail: true,
+                sendSMS: false,
+            });
+
+            toast.showSuccess('Token generated successfully!');
+            loadTokens(); // Reload tokens list
+        } catch (err: unknown) {
+            toast.showError(
+                err instanceof Error ? err.message : 'Failed to generate token'
+            );
+        } finally {
+            setGeneratingToken(false);
+        }
+    };
+
+    // Copy token link to clipboard
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        toast.showSuccess('Link copied to clipboard!');
+    };
+
+    // Use effect to load the users when the users tab is active
     useEffect(() => {
         if (activeTab === 'users' && ['admin', 'manager'].includes(user.role)) {
             loadUsers();
@@ -179,12 +327,20 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         if (activeTab === 'overview') {
             loadStats();
         }
+        if (
+            activeTab === 'claims-tokens' &&
+            ['admin', 'manager'].includes(user.role)
+        ) {
+            loadTokens();
+        }
     }, [activeTab]);
 
+    // Get the first letter of the user's name and capitalize it
     const getFirstLetterCapital = (str: string) => {
         return str.charAt(0).toUpperCase() + str.slice(1);
     };
 
+    // The admin dashboard component
     return (
         <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
             {/* Header */}
@@ -241,7 +397,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             </header>
 
             <div className="flex">
-                {/* Sidebar */}
+                {/* Sidebar navigation tabs */}
                 <aside className="w-64 bg-gray-900/30 border-r border-amber-500/20 min-h-[calc(100vh-73px)] p-4">
                     <nav className="space-y-2">
                         {filteredMenuItems.map(item => {
@@ -267,7 +423,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                     </nav>
                 </aside>
 
-                {/* Main Content */}
+                {/* Main content */}
                 <main className="flex-1 p-8">
                     <div className="max-w-6xl">
                         <div className="mb-8">
@@ -285,12 +441,491 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                         </div>
 
                         {/* Stats Grid */}
-                        {activeTab === 'overview' && (
-                            <StatsOverview data={apiData} />
-                        )}
+                        {activeTab === 'overview' &&
+                            (loadingStats ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                                </div>
+                            ) : (
+                                <StatsOverview data={apiData} />
+                            ))}
 
                         {/* Claims Tab */}
                         {activeTab === 'claims' && <ClaimsTab />}
+
+                        {/* Claims Tokens Tab */}
+                        {activeTab === 'claims-tokens' &&
+                            ['admin', 'manager'].includes(user.role) && (
+                                <div className="space-y-6">
+                                    {/* Generate Token Form */}
+                                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-red-600 rounded-lg flex items-center justify-center">
+                                                <Key className="w-5 h-5 text-white" />
+                                            </div>
+                                            <h3 className="text-xl font-bold text-white">
+                                                Generate Claim Token
+                                            </h3>
+                                        </div>
+
+                                        {generatedToken && (
+                                            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/50 rounded-lg">
+                                                <div className="flex items-start gap-3 mb-4">
+                                                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                                                    <div className="flex-1">
+                                                        <p className="text-green-400 font-medium mb-2">
+                                                            Token Generated
+                                                            Successfully!
+                                                        </p>
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-gray-400 text-sm">
+                                                                    Link:
+                                                                </span>
+                                                                <code className="flex-1 bg-black/50 px-3 py-1.5 rounded text-sm text-gray-300 font-mono break-all">
+                                                                    {
+                                                                        generatedToken.link
+                                                                    }
+                                                                </code>
+                                                                <button
+                                                                    onClick={() =>
+                                                                        copyToClipboard(
+                                                                            generatedToken.link
+                                                                        )
+                                                                    }
+                                                                    className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                                                                    title="Copy link"
+                                                                >
+                                                                    <Copy className="w-4 h-4 text-gray-300" />
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-sm text-gray-400">
+                                                                <Clock className="w-4 h-4" />
+                                                                <span>
+                                                                    Expires:{' '}
+                                                                    {new Date(
+                                                                        generatedToken.expiresAt
+                                                                    ).toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() =>
+                                                            setGeneratedToken(
+                                                                null
+                                                            )
+                                                        }
+                                                        className="text-gray-400 hover:text-white transition-colors"
+                                                    >
+                                                        <X className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <form
+                                            onSubmit={handleGenerateToken}
+                                            className="space-y-4"
+                                        >
+                                            <div className="grid md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                                        Customer Email{' '}
+                                                        <span className="text-red-500">
+                                                            *
+                                                        </span>
+                                                    </label>
+                                                    <input
+                                                        type="email"
+                                                        required
+                                                        value={
+                                                            tokenFormData.customerEmail
+                                                        }
+                                                        onChange={e =>
+                                                            setTokenFormData(
+                                                                prev => ({
+                                                                    ...prev,
+                                                                    customerEmail:
+                                                                        e.target
+                                                                            .value,
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-amber-500 transition-colors"
+                                                        placeholder="customer@example.com"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                                        Customer Phone{' '}
+                                                        <span className="text-red-500">
+                                                            *
+                                                        </span>
+                                                    </label>
+                                                    <input
+                                                        type="tel"
+                                                        required
+                                                        value={
+                                                            tokenFormData.customerPhone
+                                                        }
+                                                        onChange={e =>
+                                                            setTokenFormData(
+                                                                prev => ({
+                                                                    ...prev,
+                                                                    customerPhone:
+                                                                        e.target
+                                                                            .value,
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-amber-500 transition-colors"
+                                                        placeholder="04XX XXX XXX"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                                        Customer ID{' '}
+                                                        <span className="text-red-500">
+                                                            *
+                                                        </span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        required
+                                                        value={
+                                                            tokenFormData.customerId
+                                                        }
+                                                        onChange={e =>
+                                                            setTokenFormData(
+                                                                prev => ({
+                                                                    ...prev,
+                                                                    customerId:
+                                                                        e.target
+                                                                            .value,
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-amber-500 transition-colors"
+                                                        placeholder="Customer identifier"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                                        Policy Number
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={
+                                                            tokenFormData.policyNumber
+                                                        }
+                                                        onChange={e =>
+                                                            setTokenFormData(
+                                                                prev => ({
+                                                                    ...prev,
+                                                                    policyNumber:
+                                                                        e.target
+                                                                            .value,
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-amber-500 transition-colors"
+                                                        placeholder="Optional"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                                    Customer Name (for email)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={
+                                                        tokenFormData.customerName
+                                                    }
+                                                    onChange={e =>
+                                                        setTokenFormData(
+                                                            prev => ({
+                                                                ...prev,
+                                                                customerName:
+                                                                    e.target
+                                                                        .value,
+                                                            })
+                                                        )
+                                                    }
+                                                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-amber-500 transition-colors"
+                                                    placeholder="Optional - used in email greeting"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                                    Token Expiration:{' '}
+                                                    <span className="text-amber-400">
+                                                        {
+                                                            tokenFormData.expiresInHours
+                                                        }{' '}
+                                                        hours
+                                                    </span>
+                                                </label>
+                                                <div className="space-y-2">
+                                                    <input
+                                                        type="range"
+                                                        min="1"
+                                                        max="168"
+                                                        step="1"
+                                                        value={
+                                                            tokenFormData.expiresInHours
+                                                        }
+                                                        onChange={e =>
+                                                            setTokenFormData(
+                                                                prev => ({
+                                                                    ...prev,
+                                                                    expiresInHours:
+                                                                        parseInt(
+                                                                            e
+                                                                                .target
+                                                                                .value
+                                                                        ),
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                    />
+                                                    <div className="flex justify-between text-xs text-gray-500">
+                                                        <span>1 hour</span>
+                                                        <span>24 hours</span>
+                                                        <span>48 hours</span>
+                                                        <span>7 days</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid md:grid-cols-2 gap-4">
+                                                <div className="flex items-center gap-3 p-3 bg-black/30 rounded-lg border border-gray-800">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="sendEmail"
+                                                        checked={
+                                                            tokenFormData.sendEmail
+                                                        }
+                                                        onChange={e =>
+                                                            setTokenFormData(
+                                                                prev => ({
+                                                                    ...prev,
+                                                                    sendEmail:
+                                                                        e.target
+                                                                            .checked,
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-4 h-4 text-amber-500 bg-gray-700 border-gray-600 rounded focus:ring-amber-500"
+                                                    />
+                                                    <label
+                                                        htmlFor="sendEmail"
+                                                        className="flex items-center gap-2 text-gray-300 cursor-pointer"
+                                                    >
+                                                        <Mail className="w-4 h-4" />
+                                                        <span>Send Email</span>
+                                                    </label>
+                                                </div>
+                                                <div className="flex items-center gap-3 p-3 bg-black/30 rounded-lg border border-gray-800">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="sendSMS"
+                                                        checked={
+                                                            tokenFormData.sendSMS
+                                                        }
+                                                        onChange={e =>
+                                                            setTokenFormData(
+                                                                prev => ({
+                                                                    ...prev,
+                                                                    sendSMS:
+                                                                        e.target
+                                                                            .checked,
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-4 h-4 text-amber-500 bg-gray-700 border-gray-600 rounded focus:ring-amber-500"
+                                                    />
+                                                    <label
+                                                        htmlFor="sendSMS"
+                                                        className="flex items-center gap-2 text-gray-300 cursor-pointer"
+                                                    >
+                                                        <MessageSquare className="w-4 h-4" />
+                                                        <span>Send SMS</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                disabled={generatingToken}
+                                                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-red-600 text-white rounded-lg hover:from-amber-600 hover:to-red-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {generatingToken ? (
+                                                    <>
+                                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                                        Generating...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Key className="w-5 h-5" />
+                                                        Generate Token
+                                                    </>
+                                                )}
+                                            </button>
+                                        </form>
+                                    </div>
+
+                                    {/* Tokens List */}
+                                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                                        <div className="flex items-center justify-between mb-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-red-600 rounded-lg flex items-center justify-center">
+                                                    <FileText className="w-5 h-5 text-white" />
+                                                </div>
+                                                <h3 className="text-xl font-bold text-white">
+                                                    Active Tokens
+                                                </h3>
+                                            </div>
+                                            <button
+                                                onClick={loadTokens}
+                                                disabled={loadingTokens}
+                                                className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                <Loader2
+                                                    className={`w-4 h-4 ${
+                                                        loadingTokens
+                                                            ? 'animate-spin'
+                                                            : ''
+                                                    }`}
+                                                />
+                                                Refresh
+                                            </button>
+                                        </div>
+
+                                        {tokensError && (
+                                            <div className="mb-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-start gap-3">
+                                                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                                                <p className="text-red-400 text-sm">
+                                                    {tokensError}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {loadingTokens ? (
+                                            <div className="flex items-center justify-center py-12">
+                                                <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {tokens.length === 0 ? (
+                                                    <div className="text-center py-12 text-gray-400">
+                                                        <Key className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                                                        <p>
+                                                            No active tokens
+                                                            found
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    tokens.map(token => (
+                                                        <div
+                                                            key={token.id}
+                                                            className="p-4 bg-black/30 rounded-lg border border-gray-800"
+                                                        >
+                                                            <div className="flex items-start justify-between">
+                                                                <div className="flex-1">
+                                                                    <div className="grid md:grid-cols-2 gap-4 mb-3">
+                                                                        <div>
+                                                                            <p className="text-xs text-gray-400 mb-1">
+                                                                                Customer
+                                                                                ID
+                                                                            </p>
+                                                                            <p className="text-white font-medium">
+                                                                                {
+                                                                                    token.customerId
+                                                                                }
+                                                                            </p>
+                                                                        </div>
+                                                                        {token.policyNumber && (
+                                                                            <div>
+                                                                                <p className="text-xs text-gray-400 mb-1">
+                                                                                    Policy
+                                                                                    Number
+                                                                                </p>
+                                                                                <p className="text-white font-medium">
+                                                                                    {
+                                                                                        token.policyNumber
+                                                                                    }
+                                                                                </p>
+                                                                            </div>
+                                                                        )}
+                                                                        <div>
+                                                                            <p className="text-xs text-gray-400 mb-1">
+                                                                                Email
+                                                                            </p>
+                                                                            <p className="text-gray-300 text-sm">
+                                                                                {
+                                                                                    token.customerEmail
+                                                                                }
+                                                                            </p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-xs text-gray-400 mb-1">
+                                                                                Phone
+                                                                            </p>
+                                                                            <p className="text-gray-300 text-sm">
+                                                                                {
+                                                                                    token.customerPhone
+                                                                                }
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-4 text-sm">
+                                                                        <div className="flex items-center gap-2 text-gray-400">
+                                                                            <Clock className="w-4 h-4" />
+                                                                            <span>
+                                                                                Expires:{' '}
+                                                                                {new Date(
+                                                                                    token.expiresAt
+                                                                                ).toLocaleString()}
+                                                                            </span>
+                                                                        </div>
+                                                                        <span
+                                                                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                                                token.isUsed
+                                                                                    ? 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                                                                    : 'bg-green-500/20 text-green-400 border border-green-500/50'
+                                                                            }`}
+                                                                        >
+                                                                            {token.isUsed
+                                                                                ? 'Used'
+                                                                                : 'Active'}
+                                                                        </span>
+                                                                        {token.usedAt && (
+                                                                            <span className="text-gray-500 text-xs">
+                                                                                Used:{' '}
+                                                                                {new Date(
+                                                                                    token.usedAt
+                                                                                ).toLocaleString()}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                         {/* Users Tab */}
                         {activeTab === 'users' &&

@@ -30,7 +30,7 @@ export default function Admin() {
                     });
                 }
             } catch (err) {
-                console.log('No active session');
+                console.log('No active session', err);
             } finally {
                 setLoading(false);
             }

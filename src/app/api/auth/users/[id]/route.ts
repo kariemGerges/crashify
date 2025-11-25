@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/server/lib/supabase/client';
 import { getSession } from '@/server/lib/auth/session';
 import { hashPassword } from '@/server/lib/auth/password';
+import type { Database } from '@/server/lib/types/database.types';
 
 // Update user
 export async function PATCH(
@@ -29,7 +30,7 @@ export async function PATCH(
         const { id: userId } = await params;
 
         // Build update object
-        const updates: any = {};
+        const updates: Database['public']['Tables']['users']['Update'] & { password_hash?: string; is_active?: boolean } = {};
         if (name !== undefined) updates.name = name;
         if (role !== undefined) updates.role = role;
         if (isActive !== undefined) updates.is_active = isActive;
@@ -37,15 +38,24 @@ export async function PATCH(
             updates.password_hash = await hashPassword(password);
         }
 
-        const { data: updatedUser, error } = await (
-            supabase.from('users') as any
-        )
+        const { data: updatedUser, error } = await (supabase.from('users') as unknown as {
+            update: (values: Database['public']['Tables']['users']['Update']) => {
+                eq: (column: string, value: string) => {
+                    select: () => {
+                        single: () => Promise<{
+                            data: Database['public']['Tables']['users']['Row'] | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
+                };
+            };
+        })
             .update(updates)
             .eq('id', userId)
             .select()
             .single();
 
-        if (error) {
+        if (error || !updatedUser) {
             console.error('Database error:', error);
             return NextResponse.json(
                 { error: 'Failed to update user' },
@@ -54,16 +64,18 @@ export async function PATCH(
         }
 
         // Log the action
-        await (supabase.from('audit_logs') as any).insert({
-            user_id: currentUser.id,
+        const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
+            changed_by: currentUser.id,
             action: 'user_updated',
-            resource: 'users',
-            details: {
+            new_values: {
                 updated_user_id: userId,
                 changes: updates,
             },
             ip_address: request.headers.get('x-forwarded-for'),
-        });
+        };
+        await (supabase.from('audit_logs') as unknown as {
+            insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
+        }).insert(auditLogInsert);
 
         return NextResponse.json({
             success: true,
@@ -72,7 +84,7 @@ export async function PATCH(
                 email: updatedUser.email,
                 name: updatedUser.name,
                 role: updatedUser.role,
-                isActive: updatedUser.is_active,
+                isActive: (updates.is_active !== undefined ? updates.is_active : true),
             },
         });
     } catch (error) {
@@ -117,9 +129,16 @@ export async function DELETE(
         }
 
         // First, verify the user exists and get current state
-        const { data: existingUser, error: fetchError } = await (
-            supabase.from('users') as any
-        )
+        const { data: existingUser, error: fetchError } = await (supabase.from('users') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string) => {
+                    single: () => Promise<{
+                        data: (Pick<Database['public']['Tables']['users']['Row'], 'id' | 'email' | 'name'> & { is_active?: boolean }) | null;
+                        error: { message: string } | null;
+                    }>;
+                };
+            };
+        })
             .select('id, is_active, email, name')
             .eq('id', userId)
             .single();
@@ -134,12 +153,26 @@ export async function DELETE(
 
 
         // Soft delete (set is_active to false) - allow re-deleting if already deleted
+        const deleteUpdate: Database['public']['Tables']['users']['Update'] & { is_active: boolean } = { 
+            is_active: false, 
+            updated_at: new Date().toISOString() 
+        };
         const {
             data: updatedUser,
             error,
-            count,
-        } = await (supabase.from('users') as any)
-            .update({ is_active: false, updated_at: new Date().toISOString() })
+        } = await (supabase.from('users') as unknown as {
+            update: (values: Database['public']['Tables']['users']['Update'] & { is_active?: boolean }) => {
+                eq: (column: string, value: string) => {
+                    select: () => {
+                        single: () => Promise<{
+                            data: Database['public']['Tables']['users']['Row'] | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
+                };
+            };
+        })
+            .update(deleteUpdate)
             .eq('id', userId)
             .select()
             .single();
@@ -162,7 +195,15 @@ export async function DELETE(
         }
 
         // Double-check by querying the user again
-        const { data: verifyUser } = await (supabase.from('users') as any)
+        const { data: verifyUser } = await (supabase.from('users') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string) => {
+                    single: () => Promise<{
+                        data: (Pick<Database['public']['Tables']['users']['Row'], 'id'> & { is_active?: boolean }) | null;
+                    }>;
+                };
+            };
+        })
             .select('id, is_active')
             .eq('id', userId)
             .single();
@@ -184,16 +225,22 @@ export async function DELETE(
         });
 
         // Delete all user sessions
-        await (supabase.from('sessions') as any).delete().eq('user_id', userId);
+        await (supabase.from('sessions') as unknown as {
+            delete: () => {
+                eq: (column: string, value: string) => Promise<unknown>;
+            };
+        }).delete().eq('user_id', userId);
 
         // Log the action
-        await (supabase.from('audit_logs') as any).insert({
-            user_id: currentUser.id,
+        const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
+            changed_by: currentUser.id,
             action: 'user_deleted',
-            resource: 'users',
-            details: { deleted_user_id: userId },
+            new_values: { deleted_user_id: userId },
             ip_address: request.headers.get('x-forwarded-for'),
-        });
+        };
+        await (supabase.from('audit_logs') as unknown as {
+            insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
+        }).insert(auditLogInsert);
 
         return NextResponse.json({ success: true });
     } catch (error) {

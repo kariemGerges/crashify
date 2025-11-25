@@ -1,11 +1,4 @@
-import {
-    FileText,
-    Users,
-    CheckCircle,
-    Clock,
-    Laptop,
-    MapPin,
-} from 'lucide-react';
+import { FileText, CheckCircle, Clock, Laptop, MapPin } from 'lucide-react';
 
 interface StatsData {
     total: number;
@@ -18,12 +11,6 @@ interface StatsData {
 }
 
 type Status = 'completed' | 'processing' | 'pending';
-
-const statusMapping: Record<string, Status> = {
-    pending: 'pending',
-    processing: 'processing',
-    completed: 'completed',
-};
 
 export const StatsOverview = ({ data }: { data: StatsData }) => {
     // Default data structure if none provided
@@ -45,10 +32,11 @@ export const StatsOverview = ({ data }: { data: StatsData }) => {
 
     const pendingPercentage =
         stats.total > 0 ? ((stats.pending / stats.total) * 100).toFixed(0) : 0;
-    
+
     const numberOfClaimsAdded =
-        stats.total > 0 ? ((stats.recentSubmissions / stats.total) * 100).toFixed(0) : 0;
-    
+        stats.total > 0
+            ? ((stats.recentSubmissions / stats.total) * 100).toFixed(0)
+            : 0;
 
     const statsConfig = [
         {
