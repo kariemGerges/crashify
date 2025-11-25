@@ -104,18 +104,18 @@ export default function HowItWorks() {
             </div>
 
             <div className="max-w-7xl mx-auto relative z-10">
-                <div className="text-center mb-10 sm:mb-12 md:mb-16">
-                    <div className="inline-block mb-4 px-4 py-2 bg-red-600/10 border border-red-600/30 rounded-full">
-                        <span className="text-red-400 text-sm font-semibold uppercase tracking-wider">
+                <div className="text-center mb-12 sm:mb-16 md:mb-20">
+                    <div className="inline-block mb-4 sm:mb-5 px-4 py-1.5 sm:px-5 sm:py-2 bg-red-600/10 border border-red-600/30 rounded-full backdrop-blur-sm">
+                        <span className="text-red-400 text-xs sm:text-sm font-semibold uppercase tracking-wider">
                             Simple Process
                         </span>
                     </div>
-                    <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 text-white">
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 text-white">
                         How It Works
                     </h2>
-                    <div className="w-20 h-1 bg-gradient-to-r from-red-500 to-red-600 mx-auto mb-4 sm:mb-6"></div>
-                    <p className="text-gray-300 text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-                        Utilize Crashify&apos;s advanced technology to offers
+                    <div className="w-20 sm:w-24 h-1 bg-gradient-to-r from-red-500 via-red-600 to-red-500 mx-auto rounded-full mb-6 sm:mb-8"></div>
+                    <p className="text-gray-300 text-base sm:text-lg md:text-xl lg:text-2xl max-w-3xl mx-auto leading-relaxed sm:leading-loose px-4">
+                        Utilize Crashify&apos;s advanced technology to offer
                         services in just a few simple steps. This technology can
                         help insurance companies expedite the claims process,
                         reduce fraud, and ensure fair and accurate assessments.
@@ -160,12 +160,12 @@ export default function HowItWorks() {
                                     </div>
 
                                     {/* Content section */}
-                                    <div className="p-6">
-                                        <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">
+                                    <div className="p-6 sm:p-8">
+                                        <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-5 leading-tight">
                                             {step.title}
                                         </h3>
 
-                                        <p className="text-gray-400 leading-relaxed text-sm sm:text-base">
+                                        <p className="text-gray-400 leading-relaxed sm:leading-loose text-sm sm:text-base">
                                             {step.description}
                                         </p>
 
@@ -218,11 +218,10 @@ export default function HowItWorks() {
                 </div>
 
                 {/* CTA Section */}
-                <div className="mt-6 sm:mt-16 text-center">
+                <div className="mt-10 sm:mt-16 lg:mt-20 text-center space-y-6">
                     <TakeSpin px="px-8" py="py-4" />
-                    <p className="text-gray-400 text-sm pt-8">
-                        Smart Assessment Booking | 48-Hour Guaranteed
-                        Delivery
+                    <p className="text-gray-400 text-sm sm:text-base pt-4">
+                        Smart Assessment Booking | 48-Hour Guaranteed Delivery
                     </p>
                 </div>
             </div>

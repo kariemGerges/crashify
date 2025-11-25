@@ -106,10 +106,17 @@ function WhyChooseUs() {
             ref={sectionRef}
             className="py-12 px-4 sm:py-16 md:py-20 bg-black overflow-hidden"
         >
-            <div className="max-w-6xl mx-auto">
-                <div className="text-center mb-12">
+            <div className="max-w-7xl mx-auto">
+                <div className="text-center mb-12 sm:mb-16 lg:mb-20">
+                    <div className="inline-block mb-4 sm:mb-5">
+                        <span className="inline-block px-4 py-1.5 sm:px-5 sm:py-2 bg-red-600/10 border border-red-500/30 rounded-full backdrop-blur-sm">
+                            <span className="text-red-400 text-xs sm:text-sm font-semibold uppercase tracking-wider">
+                                Our Advantages
+                            </span>
+                        </span>
+                    </div>
                     <h2
-                        className={`text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-white transform transition-all duration-700 ease-out ${
+                        className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 text-white transform transition-all duration-700 ease-out ${
                             isVisible
                                 ? 'opacity-100 translate-y-0'
                                 : 'opacity-0 translate-y-10'
@@ -118,17 +125,17 @@ function WhyChooseUs() {
                         Why Choose Us
                     </h2>
                     <div
-                        className={`h-1 bg-red-600 mx-auto transition-all duration-700 ease-out ${
-                            isVisible ? 'w-20 opacity-100' : 'w-0 opacity-0'
+                        className={`h-1 bg-gradient-to-r from-red-500 via-red-600 to-red-500 mx-auto rounded-full transition-all duration-700 ease-out ${
+                            isVisible ? 'w-20 sm:w-24 opacity-100' : 'w-0 opacity-0'
                         }`}
                     ></div>
                 </div>
 
-                <div className="grid gap-6 sm:gap-8 md:grid-cols-3">
+                <div className="grid gap-6 sm:gap-8 lg:gap-10 md:grid-cols-2 lg:grid-cols-4">
                     {features.map((feature, index) => (
                         <div
                             key={index}
-                            className={`relative bg-gray-800 text-gray-200 rounded-lg p-6 sm:p-8 shadow-md border border-red-700 hover:border-red-500 transition-all duration-500 hover:-translate-y-2 hover:scale-105 transform ${
+                            className={`relative bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-sm text-gray-200 rounded-xl sm:rounded-2xl p-6 sm:p-8 lg:p-10 shadow-xl border border-gray-700/50 hover:border-red-500/50 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-red-500/10 transform ${
                                 isVisible
                                     ? 'opacity-100 translate-y-0'
                                     : 'opacity-0 translate-y-10'
@@ -139,19 +146,28 @@ function WhyChooseUs() {
                                     : '0ms',
                             }}
                         >
-                            <div className="flex justify-center mb-5">
-                                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-600 transition-transform duration-500 hover:scale-110">
-                                    {feature.icon}
+                            {/* Icon Container */}
+                            <div className="flex justify-center mb-6 sm:mb-8">
+                                <div className="relative">
+                                    <div className="absolute inset-0 bg-red-500/20 rounded-full blur-xl"></div>
+                                    <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-500/20 to-red-600/30 rounded-full flex items-center justify-center text-red-400 border border-red-500/30 transition-all duration-500 hover:scale-110 hover:bg-red-500/30">
+                                        {feature.icon}
+                                    </div>
                                 </div>
                             </div>
 
-                            <h3 className="text-xl sm:text-2xl font-semibold text-center mb-4 text-white hover:text-red-500 transition-colors duration-300">
+                            {/* Title */}
+                            <h3 className="text-xl sm:text-2xl font-bold text-center mb-4 sm:mb-6 text-white hover:text-red-400 transition-colors duration-300 leading-tight">
                                 {feature.title}
                             </h3>
 
-                            <p className="text-center text-gray-300 text-sm sm:text-base leading-relaxed">
+                            {/* Description */}
+                            <p className="text-center text-gray-300 text-sm sm:text-base leading-relaxed sm:leading-loose">
                                 {feature.description}
                             </p>
+                            
+                            {/* Decorative bottom accent */}
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-red-500/50 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
                         </div>
                     ))}
                 </div>

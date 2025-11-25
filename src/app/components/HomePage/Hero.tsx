@@ -15,9 +15,26 @@ export default function CrashifyHero() {
             <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
                 {/* Top Title */}
                 <div className="text-center mb-6 sm:mb-8 lg:mb-12">
-                    <h1 className="text-white text-2xl sm:text-base lg:text-4xl font-light tracking-widest mb-2">
-                        Book. Assess. Report. All in 48 Hours.
+                    <div className="inline-block mb-3 sm:mb-4">
+                        <span className="inline-block px-4 py-1.5 sm:px-5 sm:py-2 bg-red-600/20 border border-red-500/40 rounded-full backdrop-blur-sm">
+                            <span className="text-red-400 text-xs sm:text-sm font-semibold uppercase tracking-wider">
+                                48-Hour Guarantee
+                            </span>
+                        </span>
+                    </div>
+                    <h1 className="text-white text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 leading-tight">
+                        <span className="block mb-2 sm:mb-3 bg-gradient-to-r from-white via-gray-100 to-white bg-clip-text text-transparent">
+                            Book. Assess. Report.
+                        </span>
+                        <span className="block text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold text-red-400">
+                            All in 48 Hours
+                        </span>
                     </h1>
+                    <div className="flex items-center justify-center gap-2 sm:gap-3">
+                        <div className="h-px w-12 sm:w-16 bg-gradient-to-r from-transparent via-red-500 to-red-500"></div>
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                        <div className="h-px w-12 sm:w-16 bg-gradient-to-l from-transparent via-red-500 to-red-500"></div>
+                    </div>
                 </div>
 
                 {/* Car Image Section */}
@@ -143,16 +160,22 @@ export default function CrashifyHero() {
                 </div>
 
                 {/* Text Content Section */}
-                <div className="max-w-4xl mx-auto text-center space-y-1 sm:space-y-8">
+                <div className="max-w-4xl mx-auto text-center space-y-8 sm:space-y-10 lg:space-y-12">
                     {/* Main Heading */}
-                    <div className="inline-block px-6 sm:px-8 py-3 sm:py-4">
-                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r text-blue-50">
-                            Why Crashify?
-                        </h1>
+                    <div className="space-y-4 sm:space-y-6">
+                        <div className="inline-block">
+                            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4">
+                                <span className="bg-gradient-to-r from-white via-gray-100 to-white bg-clip-text text-transparent">
+                                    Why Crashify?
+                                </span>
+                            </h2>
+                            <div className="h-1 w-16 sm:w-20 bg-gradient-to-r from-red-500 via-red-600 to-red-500 mx-auto rounded-full"></div>
+                        </div>
                     </div>
+                    
                     {/* Description */}
-                    <div className=" px-6 sm:px-10 lg:px-16 py-6 sm:py-8 lg:py-10 rounded-lg mx-4 sm:mx-0">
-                        <p className="text-white text-base sm:text-lg lg:text-xl leading-relaxed font-light">
+                    <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+                        <p className="text-white text-base sm:text-lg md:text-xl lg:text-2xl leading-relaxed sm:leading-loose font-light max-w-3xl mx-auto">
                             Crashify transforms the traditional vehicle
                             assessment process with smart AI automation and
                             professional coordination. Our streamlined booking
@@ -162,9 +185,16 @@ export default function CrashifyHero() {
                             spreadsheets, or waiting weeks for assessments.
                         </p>
                     </div>
-                    <StatCard />
+                    
+                    {/* Stats Section */}
+                    <div className="py-4 sm:py-6">
+                        <StatCard />
+                    </div>
+                    
                     {/* CTA Button */}
-                    <TakeSpin px="px-12" py="py-4" />
+                    <div className="pt-4 sm:pt-6">
+                        <TakeSpin px="px-12" py="py-4" />
+                    </div>
                 </div>
             </div>
 

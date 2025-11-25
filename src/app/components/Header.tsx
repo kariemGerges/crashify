@@ -35,35 +35,47 @@ export default function Header() {
                     </div>
 
                     {/* Desktop Navigation */}
-                    <div className="hidden lg:flex items-center space-x-8">
+                    <div className="hidden lg:flex items-center space-x-1">
                         <Link
                             href="/pages/services"
-                            className={`font-medium transition-colors
-                                ${isScrolled ? 'text-gray-950' : ''}
+                            className={`px-4 py-2 text-sm font-semibold transition-all duration-300 rounded-lg
+                                ${isScrolled 
+                                    ? 'text-gray-900 hover:text-red-600 hover:bg-red-50' 
+                                    : 'text-white/90 hover:text-white hover:bg-white/10'
+                                }
                                 `}
                         >
                             Services
                         </Link>
                         <Link
                             href="/pages/blog"
-                            className={`font-medium transition-colors
-                ${isScrolled ? 'text-gray-950' : ''}
+                            className={`px-4 py-2 text-sm font-semibold transition-all duration-300 rounded-lg
+                                ${isScrolled 
+                                    ? 'text-gray-900 hover:text-red-600 hover:bg-red-50' 
+                                    : 'text-white/90 hover:text-white hover:bg-white/10'
+                                }
                                 `}
                         >
                             Blog
                         </Link>
                         <Link
                             href="/pages/about"
-                            className={`font-medium transition-colors
-                ${isScrolled ? 'text-gray-950' : ''}
+                            className={`px-4 py-2 text-sm font-semibold transition-all duration-300 rounded-lg
+                                ${isScrolled 
+                                    ? 'text-gray-900 hover:text-red-600 hover:bg-red-50' 
+                                    : 'text-white/90 hover:text-white hover:bg-white/10'
+                                }
                                 `}
                         >
                             About
                         </Link>
                         <Link
                             href="/pages/contact"
-                            className={`font-medium transition-colors
-                ${isScrolled ? 'text-gray-950' : ''}
+                            className={`px-4 py-2 text-sm font-semibold transition-all duration-300 rounded-lg
+                                ${isScrolled 
+                                    ? 'text-gray-900 hover:text-red-600 hover:bg-red-50' 
+                                    : 'text-white/90 hover:text-white hover:bg-white/10'
+                                }
                                 `}
                         >
                             Contact
@@ -108,43 +120,59 @@ export default function Header() {
                 {mobileMenuOpen && (
                     <div
                         onClick={() => setMobileMenuOpen(false)}
-                        className="lg:hidden border-t border-red-200 py-4 space-y-4">
+                        className={`lg:hidden border-t py-4 space-y-1 ${
+                            isScrolled 
+                                ? ' transition-all duration-300' 
+                                : ' transition-all duration-300'
+                        }`}
+                    >
                         <Link
                             href="/pages/services"
-                            className={`block px-4 py-2 font-medium
-                                ${isScrolled ? 'text-gray-950' : ''}
+                            className={`block px-6 py-3 text-base font-semibold transition-colors rounded-lg mx-2
+                                ${isScrolled 
+                                    ? 'text-gray-900 hover:text-red-600 hover:bg-red-50' 
+                                    : 'text-white hover:text-red-400 hover:bg-white/10'
+                                }
                                 `}
                         >
                             Services
                         </Link>
                         <Link
                             href="/pages/blog"
-                            className={`block px-4 py-2 font-medium
-                            ${isScrolled ? 'text-gray-950' : ''}
-                            `}
+                            className={`block px-6 py-3 text-base font-semibold transition-colors rounded-lg mx-2
+                                ${isScrolled 
+                                    ? 'text-gray-900 hover:text-red-600 hover:bg-red-50' 
+                                    : 'text-white hover:text-red-400 hover:bg-white/10'
+                                }
+                                `}
                         >
                             Blog
                         </Link>
                         <Link
                             href="/pages/about"
-                            className={`block px-4 py-2 font-medium
-                                ${isScrolled ? 'text-gray-950' : ''}
+                            className={`block px-6 py-3 text-base font-semibold transition-colors rounded-lg mx-2
+                                ${isScrolled 
+                                    ? 'text-gray-900 hover:text-red-600 hover:bg-red-50' 
+                                    : 'text-white hover:text-red-400 hover:bg-white/10'
+                                }
                                 `}
                         >
                             About
                         </Link>
                         <Link
                             href="/pages/contact"
-                            className={`block px-4 py-2 font-medium
-                                ${isScrolled ? 'text-gray-950' : ''}
+                            className={`block px-6 py-3 text-base font-semibold transition-colors rounded-lg mx-2
+                                ${isScrolled 
+                                    ? 'text-gray-900 hover:text-red-600 hover:bg-red-50' 
+                                    : 'text-white hover:text-red-400 hover:bg-white/10'
+                                }
                                 `}
                         >
                             Contact
                         </Link>
-                        <div className="px-4 pt-4 space-y-3 border-t border-red-200">
-                            {/* <button className="w-full px-4 py-2 font-medium border border-gray-300 rounded-lg">
-                                Sign In
-                            </button> */}
+                        <div className={`px-4 pt-4 space-y-3 border-t mt-4 ${
+                            isScrolled ? 'border-gray-200' : 'border-white/20'
+                        }`}>
                             <div className="pb-2 text-center">
                                 <TakeSpin px="px-28" py="py-2.5" />
                             </div>

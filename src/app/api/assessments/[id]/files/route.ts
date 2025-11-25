@@ -6,11 +6,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/server/lib/supabase/client';
+import { validateAndExtractIp } from '@/server/lib/utils/security';
 import type { Database } from '@/server/lib/types/database.types';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 type UploadedFileInsert =
     Database['public']['Tables']['uploaded_files']['Insert'];
 type UploadedFileRow = Database['public']['Tables']['uploaded_files']['Row'];
+type AuditLogInsert = Database['public']['Tables']['audit_logs']['Insert'];
 
 // Remove unused type warning by using it
 export type { UploadedFileInsert };
@@ -26,7 +29,7 @@ const ALLOWED_IMAGE_TYPES = [
     'image/webp',
     'image/bmp',
     'image/svg+xml',
-];
+] as const;
 
 // Allowed file extensions
 const ALLOWED_EXTENSIONS = [
@@ -40,38 +43,138 @@ const ALLOWED_EXTENSIONS = [
     '.pdf',
     '.doc',
     '.docx',
-];
+] as const;
 
-const BUCKET_NAME = 'assessment-photos';
+const BUCKET_NAME = 'Assessment-photos';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILES_PER_UPLOAD = 30;
+const MAX_FILENAME_LENGTH = 255;
+
+/**
+ * Validates file extension against allowed list
+ */
+function isValidFileExtension(filename: string): boolean {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (!ext) return false;
+    return ALLOWED_EXTENSIONS.includes(
+        `.${ext}` as (typeof ALLOWED_EXTENSIONS)[number]
+    );
+}
+
+/**
+ * Validates MIME type for images
+ */
+function isValidImageMimeType(mimeType: string): boolean {
+    return ALLOWED_IMAGE_TYPES.includes(
+        mimeType as (typeof ALLOWED_IMAGE_TYPES)[number]
+    );
+}
+
+/**
+ * Sanitizes filename to prevent path traversal and other attacks
+ */
+function sanitizeFilename(filename: string): string {
+    // Remove path separators and dangerous characters
+    return filename
+        .replace(/[\/\\]/g, '')
+        .replace(/\.\./g, '')
+        .replace(/[<>:"|?*]/g, '')
+        .trim()
+        .substring(0, MAX_FILENAME_LENGTH);
+}
+
+/**
+ * Logs audit event for file operations
+ */
+async function logAuditEvent(
+    supabase: SupabaseClient<Database>,
+    action: string,
+    assessmentId: string,
+    ipAddress: string | null,
+    userAgent: string | null,
+    metadata?: Record<string, unknown>
+): Promise<void> {
+    try {
+        const auditLog: AuditLogInsert = {
+            action,
+            assessment_id: assessmentId,
+            new_values: {
+                assessmentId,
+                ...metadata,
+            },
+            ip_address: ipAddress,
+            user_agent: userAgent,
+            changed_at: new Date().toISOString(),
+        };
+
+        await (
+            supabase.from('audit_logs') as unknown as {
+                insert: (values: AuditLogInsert) => Promise<unknown>;
+            }
+        ).insert(auditLog);
+    } catch (error) {
+        // Don't fail the request if audit logging fails
+        console.error('[AUDIT] Failed to log event:', error);
+    }
+}
+
+/**
+ * Verifies assessment exists and is not deleted
+ */
+async function verifyAssessment(
+    supabase: SupabaseClient<Database>,
+    assessmentId: string
+): Promise<{ id: string } | null> {
+    const { data, error } = await supabase
+        .from('assessments')
+        .select('id')
+        .eq('id', assessmentId)
+        .is('deleted_at', null)
+        .single();
+
+    if (error || !data) {
+        return null;
+    }
+
+    return data;
+}
 
 // POST: Upload files
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const supabase = createServerClient();
+    const rawIpHeader = request.headers.get('x-forwarded-for');
+    const ipAddress = validateAndExtractIp(rawIpHeader);
+    const userAgent = request.headers.get('user-agent');
+
     try {
-        const supabase = createServerClient();
         const { id: assessmentId } = await params;
 
-        // Verify assessment exists
-        const { data: assessment } = await (supabase.from('assessments') as unknown as {
-            select: (columns: string) => {
-                eq: (column: string, value: string) => {
-                    is: (column: string, value: null) => {
-                        single: () => Promise<{
-                            data: { id: string } | null;
-                        }>;
-                    };
-                };
-            };
-        })
-            .select('id')
-            .eq('id', assessmentId)
-            .is('deleted_at', null)
-            .single();
+        // Validate assessment ID format (UUID)
+        if (
+            !assessmentId ||
+            typeof assessmentId !== 'string' ||
+            assessmentId.length < 10
+        ) {
+            return NextResponse.json(
+                { error: 'Invalid assessment ID' },
+                { status: 400 }
+            );
+        }
 
+        // Verify assessment exists and is not deleted
+        const assessment = await verifyAssessment(supabase, assessmentId);
         if (!assessment) {
+            await logAuditEvent(
+                supabase,
+                'file_upload_failed',
+                assessmentId,
+                ipAddress,
+                userAgent,
+                { reason: 'assessment_not_found' }
+            );
             return NextResponse.json(
                 { error: 'Assessment not found' },
                 { status: 404 }
@@ -90,29 +193,59 @@ export async function POST(
         }
 
         // Validate file count
-        if (files.length > 30) {
+        if (files.length > MAX_FILES_PER_UPLOAD) {
             return NextResponse.json(
-                { error: 'Maximum 30 files allowed' },
+                {
+                    error: `Maximum ${MAX_FILES_PER_UPLOAD} files allowed per upload`,
+                },
                 { status: 400 }
             );
         }
 
-        const uploadResults = [];
+        const uploadResults: Array<{
+            name: string;
+            success: boolean;
+            id?: string;
+            url?: string;
+            error?: string;
+        }> = [];
+        const uploadedFilePaths: string[] = []; // Track for rollback
 
         for (const file of files) {
+            // Validate file name
+            const sanitizedFileName = sanitizeFilename(file.name);
+            if (!sanitizedFileName || sanitizedFileName.length === 0) {
+                uploadResults.push({
+                    name: file.name,
+                    success: false,
+                    error: 'Invalid file name',
+                });
+                continue;
+            }
+
             // Validate file size
+            if (file.size === 0) {
+                uploadResults.push({
+                    name: file.name,
+                    success: false,
+                    error: 'File is empty',
+                });
+                continue;
+            }
+
             if (file.size > MAX_FILE_SIZE) {
                 uploadResults.push({
                     name: file.name,
                     success: false,
-                    error: 'File size exceeds 10MB limit',
+                    error: `File size exceeds ${
+                        MAX_FILE_SIZE / 1024 / 1024
+                    }MB limit`,
                 });
                 continue;
             }
 
             // Validate file extension
-            const fileExt = file.name.split('.').pop()?.toLowerCase();
-            if (!fileExt || !ALLOWED_EXTENSIONS.includes(`.${fileExt}`)) {
+            if (!isValidFileExtension(file.name)) {
                 uploadResults.push({
                     name: file.name,
                     success: false,
@@ -123,9 +256,11 @@ export async function POST(
                 continue;
             }
 
+            const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+
             // Validate MIME type for images
             if (file.type && file.type.startsWith('image/')) {
-                if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+                if (!isValidImageMimeType(file.type)) {
                     uploadResults.push({
                         name: file.name,
                         success: false,
@@ -138,19 +273,18 @@ export async function POST(
             }
 
             // Generate unique file path
-            const fileName = `${Date.now()}-${Math.random()
-                .toString(36)
-                .substring(7)}.${fileExt}`;
+            const timestamp = Date.now();
+            const randomStr = Math.random().toString(36).substring(2, 9);
+            const fileName = `${timestamp}-${randomStr}.${fileExt}`;
             const filePath = `${assessmentId}/${fileName}`;
 
             // Upload to storage
-            const { error: uploadError } =
-                await supabase.storage
-                    .from(BUCKET_NAME)
-                    .upload(filePath, file, {
-                        cacheControl: '3600',
-                        upsert: false,
-                    });
+            const { error: uploadError } = await supabase.storage
+                .from(BUCKET_NAME)
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false,
+                });
 
             if (uploadError) {
                 uploadResults.push({
@@ -161,6 +295,9 @@ export async function POST(
                 continue;
             }
 
+            // Track uploaded file for potential rollback
+            uploadedFilePaths.push(filePath);
+
             // Get public URL for the uploaded file
             const {
                 data: { publicUrl },
@@ -169,7 +306,7 @@ export async function POST(
             // Save file record in database
             const fileInsert: UploadedFileInsert = {
                 assessment_id: assessmentId,
-                file_name: file.name,
+                file_name: sanitizedFileName,
                 file_url: publicUrl,
                 file_type: file.type || `application/${fileExt}`,
                 file_size: file.size,
@@ -181,23 +318,27 @@ export async function POST(
                     uploadedAt: new Date().toISOString(),
                 },
             };
-            const { data, error: dbError } = await (supabase.from('uploaded_files') as unknown as {
-                insert: (values: UploadedFileInsert[]) => {
-                    select: () => {
-                        single: () => Promise<{
-                            data: UploadedFileRow | null;
-                            error: { message: string } | null;
-                        }>;
+
+            const { data: fileRecord, error: dbError } = await (
+                supabase.from('uploaded_files') as unknown as {
+                    insert: (values: UploadedFileInsert[]) => {
+                        select: () => {
+                            single: () => Promise<{
+                                data: UploadedFileRow | null;
+                                error: { message: string } | null;
+                            }>;
+                        };
                     };
-                };
-            })
+                }
+            )
                 .insert([fileInsert])
                 .select()
                 .single();
 
-            const fileRecord = data as UploadedFileRow | null;
-
             if (dbError || !fileRecord) {
+                // Rollback: Delete uploaded file from storage if DB insert fails
+                await supabase.storage.from(BUCKET_NAME).remove([filePath]);
+
                 uploadResults.push({
                     name: file.name,
                     success: false,
@@ -217,6 +358,20 @@ export async function POST(
         const successCount = uploadResults.filter(r => r.success).length;
         const failCount = uploadResults.filter(r => !r.success).length;
 
+        // Log audit event
+        await logAuditEvent(
+            supabase,
+            'files_uploaded',
+            assessmentId,
+            ipAddress,
+            userAgent,
+            {
+                filesCount: files.length,
+                successCount,
+                failCount,
+            }
+        );
+
         return NextResponse.json({
             success: true,
             uploaded: successCount,
@@ -224,7 +379,28 @@ export async function POST(
             results: uploadResults,
         });
     } catch (error) {
-        console.error('File upload error:', error);
+        console.error('[FILE_UPLOAD] Error:', error);
+
+        // Log error to audit
+        try {
+            const { id: assessmentId } = await params;
+            await logAuditEvent(
+                supabase,
+                'file_upload_error',
+                assessmentId || 'unknown',
+                ipAddress,
+                userAgent,
+                {
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : 'Unknown error',
+                }
+            );
+        } catch (auditError) {
+            console.error('[AUDIT] Failed to log error:', auditError);
+        }
+
         return NextResponse.json(
             {
                 error: 'File upload failed',
@@ -241,27 +417,28 @@ export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const supabase = createServerClient();
+    const rawIpHeader = request.headers.get('x-forwarded-for');
+    const ipAddress = validateAndExtractIp(rawIpHeader);
+    const userAgent = request.headers.get('user-agent');
+
     try {
-        const supabase = createServerClient();
         const { id: assessmentId } = await params;
 
-        // Verify assessment exists
-        const { data: assessment } = await (supabase.from('assessments') as unknown as {
-            select: (columns: string) => {
-                eq: (column: string, value: string) => {
-                    is: (column: string, value: null) => {
-                        single: () => Promise<{
-                            data: { id: string } | null;
-                        }>;
-                    };
-                };
-            };
-        })
-            .select('id')
-            .eq('id', assessmentId)
-            .is('deleted_at', null)
-            .single();
+        // Validate assessment ID format
+        if (
+            !assessmentId ||
+            typeof assessmentId !== 'string' ||
+            assessmentId.length < 10
+        ) {
+            return NextResponse.json(
+                { error: 'Invalid assessment ID' },
+                { status: 400 }
+            );
+        }
 
+        // Verify assessment exists and is not deleted
+        const assessment = await verifyAssessment(supabase, assessmentId);
         if (!assessment) {
             return NextResponse.json(
                 { error: 'Assessment not found' },
@@ -269,6 +446,7 @@ export async function GET(
             );
         }
 
+        // Fetch files with proper error handling
         const { data, error } = await supabase
             .from('uploaded_files')
             .select('*')
@@ -276,6 +454,7 @@ export async function GET(
             .order('uploaded_at', { ascending: false });
 
         if (error) {
+            console.error('[FILE_LIST] Database error:', error);
             return NextResponse.json(
                 { error: 'Failed to fetch files', details: error.message },
                 { status: 500 }
@@ -294,9 +473,19 @@ export async function GET(
             };
         });
 
+        // Log audit event for file listing
+        await logAuditEvent(
+            supabase,
+            'files_listed',
+            assessmentId,
+            ipAddress,
+            userAgent,
+            { filesCount: enhancedData.length }
+        );
+
         return NextResponse.json({ data: enhancedData });
     } catch (error) {
-        console.error('API Error:', error);
+        console.error('[FILE_LIST] Error:', error);
         return NextResponse.json(
             {
                 error: 'Internal server error',

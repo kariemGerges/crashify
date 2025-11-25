@@ -18,23 +18,55 @@ export const metadata = {
     },
 };
 
+/**
+ * Enterprise-level homepage layout with optimized structure,
+ * accessibility, and performance considerations.
+ */
 export default function CrashifyLayout() {
     return (
-        <div>
-            {/* Main Content Area */}
+        <div className="min-h-screen flex flex-col">
+            {/* Header Navigation */}
             <Header />
-            <main className="flex-grow bg-[#f8f9fa]">
-                <section>
+
+            {/* Main Content Area with proper semantic structure */}
+            <main
+                id="main-content"
+                className="flex-grow bg-gradient-to-b from-[#f8f9fa] via-white to-[#f8f9fa]"
+                role="main"
+                aria-label="Main content"
+            >
+                {/* Hero Section - Primary CTA and Value Proposition */}
+                <section
+                    id="hero"
+                    aria-label="Hero section"
+                    className="relative overflow-hidden"
+                >
                     <Hero />
                 </section>
-                <section>
+
+                {/* Why Choose Us Section - Key Differentiators */}
+                <section
+                    id="why-choose-us"
+                    aria-label="Why choose Crashify"
+                    className="relative"
+                >
                     <WhyChooseUs />
                 </section>
-                <section>
+
+                {/* How It Works Section - Process Overview */}
+                <section
+                    id="how-it-works"
+                    aria-label="How Crashify works"
+                    className="relative"
+                >
                     <HowItWorks />
                 </section>
             </main>
+
+            {/* ChatBot - Customer Support */}
             <ChatBot />
+
+            {/* Footer - Site Information and Links */}
             <Footer />
         </div>
     );
