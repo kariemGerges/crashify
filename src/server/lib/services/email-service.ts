@@ -809,6 +809,47 @@ export class EmailService {
     }
 
     /**
+     * Simple email sending method for general use
+     */
+    static async sendEmail(params: {
+        to: string;
+        subject: string;
+        html: string;
+        from?: string;
+    }): Promise<SendEmailResult> {
+        try {
+            const config = EmailConfigManager.getConfig();
+            const client = this.getResendClient();
+            
+            const response = await client.emails.send({
+                from: params.from || config.fromEmail,
+                to: params.to,
+                subject: params.subject,
+                html: params.html,
+            });
+
+            if (response.error) {
+                return {
+                    success: false,
+                    error: response.error.message || 'Failed to send email',
+                    errorCode: EmailErrorCode.API_ERROR,
+                };
+            }
+
+            return {
+                success: true,
+                messageId: response.data?.id,
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                errorCode: EmailErrorCode.UNKNOWN_ERROR,
+            };
+        }
+    }
+
+    /**
      * Generate HTML email template for 2FA setup with QR code
      */
     private static getTwoFactorSetupTemplate(

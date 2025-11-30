@@ -5,9 +5,11 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/server/lib/types/database.types';
+import { getRequiredEnv } from '@/server/lib/config/env-validation';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Validate and get required environment variables
+const supabaseUrl = getRequiredEnv('NEXT_PUBLIC_SUPABASE_URL');
+const supabaseAnonKey = getRequiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
 // Browser client (with built-in caching)
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -32,9 +34,10 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 
 // Server-side client (for API routes)
 export const createServerClient = (): SupabaseClient<Database> => {
+    const serviceRoleKey = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
     return createClient<Database>(
         supabaseUrl,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!, // Use service role for server
+        serviceRoleKey, // Use service role for server
         {
             auth: {
                 persistSession: false,

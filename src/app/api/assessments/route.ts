@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/server/lib/supabase/client';
 import { validateAssessmentForm } from '@/server/lib/utils/validation';
+import { SpamDetector } from '@/server/lib/services/spam-detector';
+import { validateAndExtractIp } from '@/server/lib/utils/security';
 import type { AssessmentFormData, Database, Json } from '@/server/lib/types/database.types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidateTag } from 'next/cache';
@@ -32,6 +34,85 @@ export async function POST(request: NextRequest) {
                 { error: 'Validation failed', errors: validationErrors },
                 { status: 400 }
             );
+        }
+
+        // Spam detection (only for non-trusted domains)
+        const rawIpHeader = request.headers.get('x-forwarded-for');
+        const ipAddress = validateAndExtractIp(rawIpHeader);
+        const userAgent = request.headers.get('user-agent') || '';
+        const submitTimeSeconds = body.submitTimeSeconds || undefined; // Should be sent from frontend
+        const photoCount = body.photoCount || 0;
+
+        // Skip spam check for trusted insurance company domains
+        const isTrusted = SpamDetector.isTrustedDomain(formData.yourEmail);
+        let spamCheckResult: { spamScore: number; flags: string[]; action: string } | null = null;
+        
+        if (!isTrusted) {
+            const spamCheck = SpamDetector.checkSpam({
+                email: formData.yourEmail,
+                phone: formData.yourPhone,
+                name: formData.yourName,
+                description: formData.incidentDescription,
+                photoCount,
+                submitTimeSeconds,
+                ipAddress: ipAddress || undefined,
+                userAgent,
+            });
+
+            spamCheckResult = {
+                spamScore: spamCheck.spamScore,
+                flags: spamCheck.flags,
+                action: spamCheck.action,
+            };
+
+            // Auto-reject if spam score is too high
+            if (spamCheck.action === 'auto_reject') {
+                console.log('[ASSESSMENT] Spam detected, auto-rejecting:', {
+                    email: formData.yourEmail,
+                    spamScore: spamCheck.spamScore,
+                    flags: spamCheck.flags,
+                });
+
+                // Log spam attempt
+                try {
+                    const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
+                        action: 'spam_detected',
+                        old_values: {},
+                        new_values: {
+                            email: formData.yourEmail,
+                            spamScore: spamCheck.spamScore,
+                            flags: spamCheck.flags,
+                            action: 'auto_reject',
+                        },
+                        ip_address: ipAddress || undefined,
+                        user_agent: userAgent || undefined,
+                        changed_at: new Date().toISOString(),
+                    };
+                    await (supabase.from('audit_logs') as unknown as {
+                        insert: (values: Database['public']['Tables']['audit_logs']['Insert'][]) => Promise<unknown>;
+                    }).insert([auditLogInsert]);
+                } catch (auditError) {
+                    console.error('[ASSESSMENT] Failed to log spam attempt:', auditError);
+                }
+
+                return NextResponse.json(
+                    {
+                        error: 'Submission rejected',
+                        message: 'Your submission could not be processed. Please contact us directly if you believe this is an error.',
+                        spamScore: spamCheck.spamScore,
+                    },
+                    { status: 403 }
+                );
+            }
+
+            // For manual review, will add spam score to internal notes below
+            if (spamCheck.action === 'manual_review' && spamCheck.spamScore > 0) {
+                console.log('[ASSESSMENT] Manual review required:', {
+                    email: formData.yourEmail,
+                    spamScore: spamCheck.spamScore,
+                    flags: spamCheck.flags,
+                });
+            }
         }
 
         // Parse insurance value amount (remove $ and commas)
@@ -109,7 +190,9 @@ export async function POST(request: NextRequest) {
                 incident_description: formData.incidentDescription || null,
                 damage_areas: formData.damageAreas || [],
                 special_instructions: formData.specialInstructions || null,
-                internal_notes: formData.internalNotes || null,
+                internal_notes: spamCheckResult && spamCheckResult.spamScore > 0
+                    ? `${formData.internalNotes || ''}\n\n[SPAM CHECK] Score: ${spamCheckResult.spamScore}/100, Flags: ${spamCheckResult.flags.join(', ')}, Action: ${spamCheckResult.action}`.trim()
+                    : formData.internalNotes || null,
 
                 // Section 8
                 authority_confirmed: formData.authorityConfirmed,

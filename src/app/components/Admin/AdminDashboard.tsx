@@ -20,6 +20,7 @@ import {
     Mail,
     MessageSquare,
     X,
+    Receipt,
 } from 'lucide-react';
 import { AddUserModal } from '@/app/components/Admin/AddUserModal';
 import { api } from '@/app/actions/getUser';
@@ -28,6 +29,7 @@ import Image from 'next/image';
 import Fady from '../../../../public/f.png';
 import { StatsOverview } from '../Admin/StatsOverview';
 import { ClaimsTab } from '../Admin/ClaimsTab';
+import { QuoteRequestsTab } from '../Admin/QuoteRequestsTab';
 import { useToast } from '../Toast';
 import { ConfirmModal } from '../Admin/ConfirmModal';
 
@@ -128,6 +130,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             icon: FileText,
             label: 'Claims Tokens',
             roles: ['admin', 'manager'],
+        },
+        {
+            id: 'quote-requests',
+            icon: Receipt,
+            label: 'Quote Requests',
+            roles: ['admin', 'manager', 'reviewer'],
         },
         {
             id: 'users',
@@ -452,6 +460,9 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
 
                         {/* Claims Tab */}
                         {activeTab === 'claims' && <ClaimsTab />}
+
+                        {/* Quote Requests Tab */}
+                        {activeTab === 'quote-requests' && <QuoteRequestsTab />}
 
                         {/* Claims Tokens Tab */}
                         {activeTab === 'claims-tokens' &&

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { Json } from '@/server/lib/types/database.types';
 import Image from 'next/image';
+import { useToast } from '../Toast';
 
 
 interface OwnerInfo {
@@ -116,7 +117,7 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
     const [uploading, setUploading] = useState(false);
     const [showStatusEdit, setShowStatusEdit] = useState(false);
     const [newStatus, setNewStatus] = useState<'pending' | 'processing' | 'completed' | 'cancelled'>('pending');
-
+    const { showError, showSuccess, showConfirm } = useToast(); // Toast context hooks to show toast messages and confirm dialogs   // Destructure the toast context hooks to use them in the component 
     useEffect(() => {
         loadAssessment();
         loadFiles();
@@ -174,7 +175,7 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
             const result = await response.json();
 
             if (result.error) {
-                alert(result.error);
+                showError(result.error);
                 return;
             }
 
@@ -182,14 +183,15 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
             setShowStatusEdit(false);
             if (onUpdate) onUpdate();
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : 'Failed to update status');
+            showError(err instanceof Error ? err.message : 'Failed to update status');
         } finally {
             setUpdating(false);
         }
     };
 
     const handleDelete = async () => {
-        if (!confirm('Are you sure you want to delete this assessment?')) return;
+        const confirm = await showConfirm('Are you sure you want to delete this assessment?');
+        if (!confirm) return;
 
         setUpdating(true);
         try {
@@ -200,15 +202,15 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
             const result = await response.json();
 
             if (result.error) {
-                alert(result.error);
+                showError(result.error);
                 return;
             }
 
-            alert('Assessment deleted successfully');
+            showSuccess('Assessment deleted successfully');
             if (onUpdate) onUpdate();
             onClose();
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : 'Failed to delete assessment');
+            showError(err instanceof Error ? err.message : 'Failed to delete assessment');
         } finally {
             setUpdating(false);
         }
@@ -233,14 +235,14 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
             const result = await response.json();
 
             if (result.error) {
-                alert(result.error);
+                showError(result.error);
                 return;
             }
 
-            alert(`Successfully uploaded ${result.uploaded} file(s)`);
+            showSuccess(`Successfully uploaded ${result.uploaded} file(s)`);
             loadFiles();
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : 'Failed to upload files');
+            showError(err instanceof Error ? err.message : 'Failed to upload files');
         } finally {
             setUploading(false);
         }

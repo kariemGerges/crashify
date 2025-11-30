@@ -3,7 +3,7 @@
 // Optimized file storage operations
 // =============================================
 
-const BUCKET_NAME = 'assessment-photos';
+const BUCKET_NAME = 'Assessment-photos';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 import { supabase } from '@/server/lib/supabase/client';
 

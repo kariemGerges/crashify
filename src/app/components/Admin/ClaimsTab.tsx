@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, Loader2, AlertCircle, ChevronLeft, ChevronRight, Copy, Send } from 'lucide-react';
 import { AssessmentDetail } from './AssessmentDetail';
+import { IQHelper } from './IQHelper';
+import { EmailAutomation } from './EmailAutomation';
 
 interface Claim {
     id: string;
@@ -32,6 +34,8 @@ export const ClaimsTab: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
+    const [iqHelperAssessmentId, setIqHelperAssessmentId] = useState<string | null>(null);
+    const [emailAutomationAssessmentId, setEmailAutomationAssessmentId] = useState<string | null>(null);
     const [pagination, setPagination] = useState<Pagination>({
         page: 1,
         pageSize: 20,
@@ -163,7 +167,29 @@ export const ClaimsTab: React.FC = () => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-4 ml-4">
+                                <div className="flex items-center gap-2 ml-4">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIqHelperAssessmentId(claim.id);
+                                        }}
+                                        className="p-2 bg-amber-500/20 text-amber-400 border border-amber-500/50 rounded-lg hover:bg-amber-500/30 transition-colors"
+                                        title="Open IQ Controls Helper"
+                                    >
+                                        <Copy className="w-4 h-4" />
+                                    </button>
+                                    {(claim.status === 'processing' || claim.status === 'completed') && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEmailAutomationAssessmentId(claim.id);
+                                            }}
+                                            className="p-2 bg-green-500/20 text-green-400 border border-green-500/50 rounded-lg hover:bg-green-500/30 transition-colors"
+                                            title="Complete & Send Reports"
+                                        >
+                                            <Send className="w-4 h-4" />
+                                        </button>
+                                    )}
                                     <span
                                         className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
                                             claim.status
@@ -208,6 +234,26 @@ export const ClaimsTab: React.FC = () => {
                 <AssessmentDetail
                     assessmentId={selectedAssessmentId}
                     onClose={() => setSelectedAssessmentId(null)}
+                    onUpdate={() => {
+                        loadClaims(pagination.page, pagination.pageSize);
+                    }}
+                />
+            )}
+
+            {iqHelperAssessmentId && (
+                <IQHelper
+                    assessmentId={iqHelperAssessmentId}
+                    onClose={() => setIqHelperAssessmentId(null)}
+                    onUpdate={() => {
+                        loadClaims(pagination.page, pagination.pageSize);
+                    }}
+                />
+            )}
+
+            {emailAutomationAssessmentId && (
+                <EmailAutomation
+                    assessmentId={emailAutomationAssessmentId}
+                    onClose={() => setEmailAutomationAssessmentId(null)}
                     onUpdate={() => {
                         loadClaims(pagination.page, pagination.pageSize);
                     }}
