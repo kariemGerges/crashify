@@ -1,11 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { XCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
-export default function PaymentCancelPage() {
+// Mark this route as dynamic to prevent static generation
+export const dynamic = 'force-dynamic';
+
+function PaymentCancelContent() {
     const searchParams = useSearchParams();
     const quoteRequestId = searchParams.get('quote_request_id');
 
@@ -39,6 +42,18 @@ export default function PaymentCancelPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function PaymentCancelPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black flex items-center justify-center">
+                <div className="text-gray-400">Loading...</div>
+            </div>
+        }>
+            <PaymentCancelContent />
+        </Suspense>
     );
 }
 

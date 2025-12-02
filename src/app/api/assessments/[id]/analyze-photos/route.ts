@@ -58,7 +58,10 @@ export async function POST(
             .from('uploaded_files')
             .select('*')
             .eq('assessment_id', id)
-            .eq('file_type', 'image')) as { data: UploadedFileRow[] | null; error: unknown };
+            .eq('file_type', 'image')) as {
+            data: UploadedFileRow[] | null;
+            error: unknown;
+        };
 
         if (filesError) {
             return NextResponse.json(
@@ -76,7 +79,7 @@ export async function POST(
 
         // Get signed URLs for photos
         const photos = await Promise.all(
-            files.map(async (file) => {
+            files.map(async file => {
                 const { data: urlData } = await supabase.storage
                     .from('Assessment-photos')
                     .createSignedUrl(file.storage_path, 3600); // 1 hour expiry
@@ -92,15 +95,29 @@ export async function POST(
         const analysisResult = await analyzeDamagePhotos(photos);
 
         // Save analysis result to assessment metadata or create analysis record
-        const { error: updateError } = await (supabase
-            .from('assessments') as unknown as {
-                update: (values: Database['public']['Tables']['assessments']['Update']) => {
-                    eq: (column: string, value: string) => Promise<{ error: unknown }>;
+        const { error: updateError } = await (
+            supabase.from('assessments') as unknown as {
+                update: (
+                    values: Database['public']['Tables']['assessments']['Update']
+                ) => {
+                    eq: (
+                        column: string,
+                        value: string
+                    ) => Promise<{
+                        data:
+                            | Database['public']['Tables']['assessments']['Row']
+                            | null;
+                        error: { message: string } | null;
+                    }>;
                 };
             }
         )
             .update({
-                internal_notes: `AI Analysis: ${analysisResult.damageDescription}\nSeverity: ${analysisResult.severity}\nAreas: ${analysisResult.damageAreas.join(', ')}`,
+                internal_notes: `AI Analysis: ${
+                    analysisResult.damageDescription
+                }\nSeverity: ${
+                    analysisResult.severity
+                }\nAreas: ${analysisResult.damageAreas.join(', ')}`,
             })
             .eq('id', id);
 
@@ -131,10 +148,10 @@ export async function POST(
         return NextResponse.json(
             {
                 error: 'Failed to analyze photos',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                details:
+                    error instanceof Error ? error.message : 'Unknown error',
             },
             { status: 500 }
         );
     }
 }
-

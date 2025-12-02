@@ -5,13 +5,19 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
-if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY environment variable is required');
+/**
+ * Get Anthropic client instance (lazy initialization)
+ * Checks for API key only when actually needed
+ */
+function getAnthropicClient(): Anthropic {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+        throw new Error('ANTHROPIC_API_KEY environment variable is required');
+    }
+    return new Anthropic({
+        apiKey,
+    });
 }
-
-const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-});
 
 export interface PhotoAnalysisResult {
     damageDetected: boolean;
@@ -87,7 +93,7 @@ Please provide:
 
 Respond in JSON format.`;
 
-        const message = await anthropic.messages.create({
+        const message = await getAnthropicClient().messages.create({
             model: 'claude-3-5-sonnet-20241022',
             max_tokens: 2000,
             messages: [
@@ -102,7 +108,14 @@ Respond in JSON format.`;
 
         // Parse JSON response
         try {
-            const parsed = JSON.parse(responseText);
+            const parsed = JSON.parse(responseText) as {
+                damageDetected?: boolean;
+                damageAreas?: string[];
+                damageDescription?: string;
+                severity?: 'minor' | 'moderate' | 'severe' | 'total_loss';
+                estimatedRepairCost?: number;
+                recommendations?: string[];
+            };
             return {
                 damageDetected: parsed.damageDetected || false,
                 damageAreas: parsed.damageAreas || [],
@@ -149,7 +162,7 @@ Please extract and return in JSON format:
 
 If any information is not found, omit that field.`;
 
-        const message = await anthropic.messages.create({
+        const message = await getAnthropicClient().messages.create({
             model: 'claude-3-5-sonnet-20241022',
             max_tokens: 2000,
             messages: [
@@ -214,7 +227,7 @@ Generate a comprehensive assessment report in markdown format including:
 
 Format the report professionally with clear sections and bullet points.`;
 
-        const message = await anthropic.messages.create({
+        const message = await getAnthropicClient().messages.create({
             model: 'claude-3-5-sonnet-20241022',
             max_tokens: 4000,
             messages: [
@@ -259,7 +272,7 @@ Please analyze and provide:
 
 Respond in JSON format.`;
 
-        const message = await anthropic.messages.create({
+        const message = await getAnthropicClient().messages.create({
             model: 'claude-3-5-sonnet-20241022',
             max_tokens: 2000,
             messages: [
@@ -323,7 +336,7 @@ Provide:
 
 Respond in JSON format.`;
 
-        const message = await anthropic.messages.create({
+        const message = await getAnthropicClient().messages.create({
             model: 'claude-3-5-sonnet-20241022',
             max_tokens: 2000,
             messages: [

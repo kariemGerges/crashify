@@ -163,3 +163,19 @@ storybook-static/
 *.key
 *.cert
 *.crt
+#DOC
+# doc files for me only
+test-upload.js
+test-file-upload.sh
+README_CLAIM_TOKEN_MIGRATION.md
+POSTMAN_TEST_GUIDE.md
+IMPLEMENTATION_STATUS.md
+
+Requirements.md
+IMPLEMENTATION_CHECKLIST.md
+DATABASE_MIGRATION_GUIDE.md
+EMAIL_PROCESSING_SETUP.md
+QUICK_STATUS.md
+claimspage-documentation.md
+
+scripts/

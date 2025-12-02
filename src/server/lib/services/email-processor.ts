@@ -7,9 +7,14 @@ import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { createServerClient } from '@/server/lib/supabase/client';
 import type { Database } from '@/server/lib/types/database.types';
+import { checkEmailFilter } from './email-filter';
+import { quarantineEmail } from './email-quarantine';
+import { SpamDetector } from './spam-detector';
+import { EmailService } from './email-service';
 
 type AssessmentInsert = Database['public']['Tables']['assessments']['Insert'];
-type UploadedFileInsert = Database['public']['Tables']['uploaded_files']['Insert'];
+type UploadedFileInsert =
+    Database['public']['Tables']['uploaded_files']['Insert'];
 
 interface EmailProcessingResult {
     success: boolean;
@@ -55,7 +60,9 @@ export class EmailProcessor {
             };
 
             if (!config.password) {
-                reject(new Error('IMAP_PASSWORD environment variable is required'));
+                reject(
+                    new Error('IMAP_PASSWORD environment variable is required')
+                );
                 return;
             }
 
@@ -119,12 +126,16 @@ export class EmailProcessor {
                         }
 
                         if (!results || results.length === 0) {
-                            console.log('[EmailProcessor] No unread emails found');
+                            console.log(
+                                '[EmailProcessor] No unread emails found'
+                            );
                             resolve();
                             return;
                         }
 
-                        console.log(`[EmailProcessor] Found ${results.length} unread emails`);
+                        console.log(
+                            `[EmailProcessor] Found ${results.length} unread emails`
+                        );
 
                         // Fetch emails using UIDs
                         const fetch = this.imap!.fetch(results, {
@@ -132,17 +143,20 @@ export class EmailProcessor {
                             struct: true,
                         });
 
-                        const emails: Array<{ uid: number; parsed: ParsedMail }> = [];
+                        const emails: Array<{
+                            uid: number;
+                            parsed: ParsedMail;
+                        }> = [];
 
-                        fetch.on('message', (msg) => {
+                        fetch.on('message', msg => {
                             let buffer = Buffer.alloc(0);
                             let uid: number | null = null;
 
-                            msg.on('attributes', (attrs) => {
+                            msg.on('attributes', attrs => {
                                 uid = attrs.uid || null;
                             });
 
-                            msg.on('body', (stream) => {
+                            msg.on('body', stream => {
                                 stream.on('data', (chunk: Buffer) => {
                                     buffer = Buffer.concat([buffer, chunk]);
                                 });
@@ -150,7 +164,9 @@ export class EmailProcessor {
 
                             msg.once('end', async () => {
                                 if (!uid) {
-                                    console.error('[EmailProcessor] No UID found for email');
+                                    console.error(
+                                        '[EmailProcessor] No UID found for email'
+                                    );
                                     return;
                                 }
 
@@ -158,16 +174,22 @@ export class EmailProcessor {
                                     const parsed = await simpleParser(buffer);
                                     emails.push({ uid, parsed });
                                 } catch (parseErr) {
-                                    console.error(`[EmailProcessor] Failed to parse email ${uid}:`, parseErr);
+                                    console.error(
+                                        `[EmailProcessor] Failed to parse email ${uid}:`,
+                                        parseErr
+                                    );
                                     result.errors.push({
                                         emailId: `uid-${uid}`,
-                                        error: parseErr instanceof Error ? parseErr.message : 'Parse error',
+                                        error:
+                                            parseErr instanceof Error
+                                                ? parseErr.message
+                                                : 'Parse error',
                                     });
                                 }
                             });
                         });
 
-                        fetch.once('error', (fetchErr) => {
+                        fetch.once('error', fetchErr => {
                             reject(fetchErr);
                         });
 
@@ -176,15 +198,24 @@ export class EmailProcessor {
                             for (const email of emails) {
                                 try {
                                     result.processed++;
-                                    const created = await this.processEmail(email.parsed, email.uid);
+                                    const created = await this.processEmail(
+                                        email.parsed,
+                                        email.uid
+                                    );
                                     if (created) {
                                         result.created++;
                                     }
                                 } catch (emailErr) {
-                                    console.error(`[EmailProcessor] Failed to process email ${email.uid}:`, emailErr);
+                                    console.error(
+                                        `[EmailProcessor] Failed to process email ${email.uid}:`,
+                                        emailErr
+                                    );
                                     result.errors.push({
                                         emailId: `uid-${email.uid}`,
-                                        error: emailErr instanceof Error ? emailErr.message : 'Processing error',
+                                        error:
+                                            emailErr instanceof Error
+                                                ? emailErr.message
+                                                : 'Processing error',
                                     });
                                 }
                             }
@@ -210,9 +241,79 @@ export class EmailProcessor {
 
     /**
      * Process a single email
+     * Enhanced with whitelist/blacklist, spam detection, quarantine, and auto-reply (REQ-4, REQ-5, REQ-6)
      */
-    private async processEmail(email: ParsedMail, uid: number): Promise<boolean> {
+    private async processEmail(
+        email: ParsedMail,
+        uid: number
+    ): Promise<boolean> {
         try {
+            const senderEmail = email.from?.text || email.from?.value?.[0]?.address || '';
+            
+            // REQ-4: Check whitelist/blacklist
+            const filterResult = await checkEmailFilter(senderEmail);
+            
+            if (filterResult.isBlacklisted) {
+                console.log(
+                    `[EmailProcessor] Email ${uid} from ${senderEmail} is blacklisted: ${filterResult.reason}`
+                );
+                
+                // REQ-5: Send auto-reply for rejected emails
+                await this.sendAutoRejectReply(senderEmail, filterResult.reason || 'Email address is blacklisted');
+                
+                // Mark email as read (don't process)
+                await this.markEmailAsRead(uid);
+                return false;
+            }
+            
+            // If whitelisted, skip spam check
+            let spamCheckResult = null;
+            if (!filterResult.isWhitelisted) {
+                // Perform spam detection
+                const emailText = email.text || email.html || '';
+                spamCheckResult = SpamDetector.checkSpam({
+                    email: senderEmail,
+                    description: emailText.substring(0, 1000), // First 1000 chars
+                    photoCount: email.attachments?.length || 0,
+                });
+                
+                // REQ-6: Quarantine suspicious emails
+                if (spamCheckResult.action === 'manual_review' || spamCheckResult.spamScore >= 50) {
+                    console.log(
+                        `[EmailProcessor] Email ${uid} from ${senderEmail} is suspicious (score: ${spamCheckResult.spamScore}), quarantining`
+                    );
+                    
+                    await quarantineEmail({
+                        email,
+                        emailUid: uid,
+                        spamScore: spamCheckResult.spamScore,
+                        spamFlags: spamCheckResult.flags,
+                        reason: `Spam score: ${spamCheckResult.spamScore}, Flags: ${spamCheckResult.flags.join(', ')}`,
+                    });
+                    
+                    // Mark email as read (quarantined)
+                    await this.markEmailAsRead(uid);
+                    return false;
+                }
+                
+                // Auto-reject if spam score is too high
+                if (spamCheckResult.action === 'auto_reject') {
+                    console.log(
+                        `[EmailProcessor] Email ${uid} from ${senderEmail} is spam (score: ${spamCheckResult.spamScore}), auto-rejecting`
+                    );
+                    
+                    // REQ-5: Send auto-reply for rejected emails
+                    await this.sendAutoRejectReply(
+                        senderEmail,
+                        'Your email was automatically rejected due to spam detection. Please contact us directly if you believe this is an error.'
+                    );
+                    
+                    // Mark email as read (rejected)
+                    await this.markEmailAsRead(uid);
+                    return false;
+                }
+            }
+            
             // Extract data from email body
             const extractedData = this.extractDataFromEmail(email);
 
@@ -220,7 +321,9 @@ export class EmailProcessor {
             if (email.attachments && email.attachments.length > 0) {
                 for (const attachment of email.attachments) {
                     if (attachment.contentType === 'application/pdf') {
-                        const pdfData = await this.extractDataFromPDF(attachment.content);
+                        const pdfData = await this.extractDataFromPDF(
+                            attachment.content
+                        );
                         // Merge PDF data with email data
                         Object.assign(extractedData, pdfData);
                     }
@@ -230,12 +333,17 @@ export class EmailProcessor {
             // Check for duplicates
             const isDuplicate = await this.checkDuplicate(extractedData);
             if (isDuplicate) {
-                console.log(`[EmailProcessor] Duplicate detected for email ${uid}, skipping`);
+                console.log(
+                    `[EmailProcessor] Duplicate detected for email ${uid}, skipping`
+                );
                 return false;
             }
 
             // Create assessment
-            const assessmentId = await this.createAssessmentFromEmail(email, extractedData);
+            const assessmentId = await this.createAssessmentFromEmail(
+                email,
+                extractedData
+            );
 
             // Download and save attachments (photos)
             if (email.attachments && email.attachments.length > 0) {
@@ -247,8 +355,62 @@ export class EmailProcessor {
 
             return true;
         } catch (err) {
-            console.error(`[EmailProcessor] Error processing email ${uid}:`, err);
+            console.error(
+                `[EmailProcessor] Error processing email ${uid}:`,
+                err
+            );
             throw err;
+        }
+    }
+    
+    /**
+     * Send auto-reply for rejected emails (REQ-5)
+     */
+    private async sendAutoRejectReply(toEmail: string, reason: string): Promise<void> {
+        try {
+            await EmailService.sendEmail({
+                to: toEmail,
+                subject: 'Re: Your email to Crashify',
+                html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <style>
+                            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                            .header { background: #f59e0b; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+                            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+                            .alert { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h2 style="margin: 0;">Crashify - Email Rejected</h2>
+                            </div>
+                            <div class="content">
+                                <p>Dear Sender,</p>
+                                <p>Thank you for contacting Crashify. Unfortunately, your email could not be processed.</p>
+                                <div class="alert">
+                                    <strong>Reason:</strong> ${reason}
+                                </div>
+                                <p>If you believe this is an error, please contact us directly at:</p>
+                                <ul>
+                                    <li>Email: info@crashify.com.au</li>
+                                    <li>Phone: (02) 1234 5678</li>
+                                </ul>
+                                <p>Best regards,<br>Crashify Team</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `,
+            });
+            console.log(`[EmailProcessor] Auto-reject reply sent to ${toEmail}`);
+        } catch (error) {
+            console.error(`[EmailProcessor] Failed to send auto-reject reply to ${toEmail}:`, error);
+            // Don't throw - email sending failure shouldn't break processing
         }
     }
 
@@ -276,7 +438,9 @@ export class EmailProcessor {
             }
 
             // Extract make/model (basic parsing)
-            const makeModelMatch = vehicleStr.match(/(Toyota|Honda|Mazda|Ford|Holden|BMW|Mercedes|Audi|Volkswagen|Hyundai|Kia|Nissan|Subaru|Mitsubishi|Lexus|Jeep|Volvo|Peugeot|Renault|Skoda|Suzuki|Isuzu|LDV|Great Wall|MG|BYD|Tesla|Polestar|Genesis|Alfa Romeo|Fiat|Chrysler|Dodge|RAM|GMC|Cadillac|Lincoln|Infiniti|Acura|Porsche|Jaguar|Land Rover|Mini|Smart|Ferrari|Lamborghini|Maserati|Bentley|Rolls-Royce|Aston Martin|McLaren|Lotus|Alpine|Cupra|SEAT|Opel|Vauxhall|Citroen|DS|Dacia|Lada|Tata|Mahindra|Chery|Haval|Great Wall|GWM|ORA|BYD|MG|LDV|Maxus|Foton|JAC|Geely|Proton|Perodua|Suzuki|Daihatsu|Isuzu|Mazda|Mitsubishi|Nissan|Subaru|Toyota|Honda|Hyundai|Kia|Genesis)\s+([A-Za-z0-9\s\-]+)/i);
+            const makeModelMatch = vehicleStr.match(
+                /(Toyota|Honda|Mazda|Ford|Holden|BMW|Mercedes|Audi|Volkswagen|Hyundai|Kia|Nissan|Subaru|Mitsubishi|Lexus|Jeep|Volvo|Peugeot|Renault|Skoda|Suzuki|Isuzu|LDV|Great Wall|MG|BYD|Tesla|Polestar|Genesis|Alfa Romeo|Fiat|Chrysler|Dodge|RAM|GMC|Cadillac|Lincoln|Infiniti|Acura|Porsche|Jaguar|Land Rover|Mini|Smart|Ferrari|Lamborghini|Maserati|Bentley|Rolls-Royce|Aston Martin|McLaren|Lotus|Alpine|Cupra|SEAT|Opel|Vauxhall|Citroen|DS|Dacia|Lada|Tata|Mahindra|Chery|Haval|Great Wall|GWM|ORA|BYD|MG|LDV|Maxus|Foton|JAC|Geely|Proton|Perodua|Suzuki|Daihatsu|Isuzu|Mazda|Mitsubishi|Nissan|Subaru|Toyota|Honda|Hyundai|Kia|Genesis)\s+([A-Za-z0-9\s\-]+)/i
+            );
             if (makeModelMatch) {
                 data.vehicleInfo = {
                     ...data.vehicleInfo,
@@ -302,7 +466,9 @@ export class EmailProcessor {
         }
 
         // Extract incident description
-        const incidentMatch = text.match(/Incident:?\s*([\s\S]*?)(?:\n\n|\n[A-Z]|$)/i);
+        const incidentMatch = text.match(
+            /Incident:?\s*([\s\S]*?)(?:\n\n|\n[A-Z]|$)/i
+        );
         if (incidentMatch) {
             data.incidentDescription = incidentMatch[1].trim();
         }
@@ -313,17 +479,29 @@ export class EmailProcessor {
     /**
      * Extract data from PDF (repairer info)
      */
-    private async extractDataFromPDF(pdfBuffer: Buffer): Promise<Partial<ExtractedData>> {
+    private async extractDataFromPDF(
+        pdfBuffer: Buffer
+    ): Promise<Partial<ExtractedData>> {
         try {
             const pdfParseModule = await import('pdf-parse');
-            const pdfParse = (pdfParseModule as any).default || pdfParseModule;
+            // Handle both default export and namespace export
+            type PdfParseFunction = (
+                data: Buffer
+            ) => Promise<{ text: string; [key: string]: unknown }>;
+            const pdfParse: PdfParseFunction =
+                'default' in pdfParseModule &&
+                typeof pdfParseModule.default === 'function'
+                    ? (pdfParseModule.default as unknown as PdfParseFunction)
+                    : (pdfParseModule as unknown as PdfParseFunction);
             const data = await pdfParse(pdfBuffer);
             const text = data.text;
 
             const repairerInfo: ExtractedData['repairerInfo'] = {};
 
             // Extract email
-            const emailMatch = text.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i);
+            const emailMatch = text.match(
+                /([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i
+            );
             if (emailMatch) {
                 repairerInfo.email = emailMatch[1];
             }
@@ -335,11 +513,17 @@ export class EmailProcessor {
             }
 
             // Extract company name (first line or line with ABN)
-            const lines = text.split('\n').filter(line => line.trim().length > 0);
-            const abnMatch = text.match(/ABN:?\s*(\d{2}\s?\d{3}\s?\d{3}\s?\d{3})/i);
+            const lines = text
+                .split('\n')
+                .filter((line: string) => line.trim().length > 0);
+            const abnMatch = text.match(
+                /ABN:?\s*(\d{2}\s?\d{3}\s?\d{3}\s?\d{3})/i
+            );
             if (abnMatch) {
                 // Find line before ABN line
-                const abnIndex = lines.findIndex(line => line.includes('ABN'));
+                const abnIndex = lines.findIndex((line: string) =>
+                    line.includes('ABN')
+                );
                 if (abnIndex > 0) {
                     repairerInfo.name = lines[abnIndex - 1].trim();
                 }
@@ -349,7 +533,9 @@ export class EmailProcessor {
             }
 
             // Extract address (line with state/postcode)
-            const addressMatch = text.match(/(\d+[^,]*,\s*[^,]*,\s*[A-Z]{2,3}\s+\d{4})/i);
+            const addressMatch = text.match(
+                /(\d+[^,]*,\s*[^,]*,\s*[A-Z]{2,3}\s+\d{4})/i
+            );
             if (addressMatch) {
                 repairerInfo.address = addressMatch[1].trim();
             }
@@ -374,10 +560,15 @@ export class EmailProcessor {
             .from('assessments')
             .select('id')
             .is('deleted_at', null)
-            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+            .gte(
+                'created_at',
+                new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+            ); // Last 24 hours
 
         if (data.claimReference && data.vehicleInfo?.registration) {
-            query = query.or(`claim_reference.eq.${data.claimReference},registration.eq.${data.vehicleInfo.registration}`);
+            query = query.or(
+                `claim_reference.eq.${data.claimReference},registration.eq.${data.vehicleInfo.registration}`
+            );
         } else if (data.claimReference) {
             query = query.eq('claim_reference', data.claimReference);
         } else if (data.vehicleInfo?.registration) {
@@ -403,7 +594,8 @@ export class EmailProcessor {
 
         // Determine company name from email domain
         const domain = fromEmail.split('@')[1] || '';
-        const companyName = this.getCompanyNameFromDomain(domain) || fromName || domain;
+        const companyName =
+            this.getCompanyNameFromDomain(domain) || fromName || domain;
 
         // Parse owner info
         const ownerInfo: Record<string, string> = {};
@@ -422,29 +614,36 @@ export class EmailProcessor {
             claim_reference: extractedData.claimReference || null,
             make: extractedData.vehicleInfo?.make || '',
             model: extractedData.vehicleInfo?.model || '',
-            year: extractedData.vehicleInfo?.year ? parseInt(extractedData.vehicleInfo.year) : null,
-            registration: extractedData.vehicleInfo?.registration?.toUpperCase() || null,
+            year: extractedData.vehicleInfo?.year
+                ? parseInt(extractedData.vehicleInfo.year)
+                : null,
+            registration:
+                extractedData.vehicleInfo?.registration?.toUpperCase() || null,
             owner_info: ownerInfo,
             incident_description: extractedData.incidentDescription || null,
             damage_areas: [],
             status: 'pending', // Needs manual review
-            internal_notes: `Imported from email. Source: ${email.from?.value[0]?.address || 'unknown'}. Subject: ${email.subject || 'no subject'}`,
+            internal_notes: `Imported from email. Source: ${
+                email.from?.value[0]?.address || 'unknown'
+            }. Subject: ${email.subject || 'no subject'}`,
             authority_confirmed: false,
             privacy_consent: false,
             email_report_consent: false,
             sms_updates: false,
         };
 
-        const { data, error } = await (this.supabase.from('assessments') as unknown as {
-            insert: (values: AssessmentInsert[]) => {
-                select: () => {
-                    single: () => Promise<{
-                        data: { id: string } | null;
-                        error: { message: string } | null;
-                    }>;
+        const { data, error } = await (
+            this.supabase.from('assessments') as unknown as {
+                insert: (values: AssessmentInsert[]) => {
+                    select: () => {
+                        single: () => Promise<{
+                            data: { id: string } | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
                 };
-            };
-        })
+            }
+        )
             .insert([assessmentData])
             .select()
             .single();
@@ -461,7 +660,11 @@ export class EmailProcessor {
      */
     private async saveAttachments(
         assessmentId: string,
-        attachments: Array<{ filename?: string; contentType: string; content: Buffer | string }>
+        attachments: Array<{
+            filename?: string;
+            contentType: string;
+            content: Buffer | string;
+        }>
     ): Promise<void> {
         const BUCKET_NAME = 'Assessment-photos';
 
@@ -472,7 +675,8 @@ export class EmailProcessor {
             }
 
             try {
-                const fileName = attachment.filename || `photo_${Date.now()}.jpg`;
+                const fileName =
+                    attachment.filename || `photo_${Date.now()}.jpg`;
                 const filePath = `${assessmentId}/${Date.now()}-${fileName}`;
                 const content = Buffer.isBuffer(attachment.content)
                     ? attachment.content
@@ -487,14 +691,19 @@ export class EmailProcessor {
                     });
 
                 if (uploadError) {
-                    console.error(`[EmailProcessor] Failed to upload ${fileName}:`, uploadError);
+                    console.error(
+                        `[EmailProcessor] Failed to upload ${fileName}:`,
+                        uploadError
+                    );
                     continue;
                 }
 
                 // Get public URL
                 const {
                     data: { publicUrl },
-                } = this.supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
+                } = this.supabase.storage
+                    .from(BUCKET_NAME)
+                    .getPublicUrl(filePath);
 
                 // Save file record
                 const fileInsert: UploadedFileInsert = {
@@ -511,11 +720,18 @@ export class EmailProcessor {
                     },
                 };
 
-                await (this.supabase.from('uploaded_files') as unknown as {
-                    insert: (values: UploadedFileInsert[]) => Promise<unknown>;
-                }).insert([fileInsert]);
+                await (
+                    this.supabase.from('uploaded_files') as unknown as {
+                        insert: (
+                            values: UploadedFileInsert[]
+                        ) => Promise<unknown>;
+                    }
+                ).insert([fileInsert]);
             } catch (err) {
-                console.error(`[EmailProcessor] Error saving attachment ${attachment.filename}:`, err);
+                console.error(
+                    `[EmailProcessor] Error saving attachment ${attachment.filename}:`,
+                    err
+                );
             }
         }
     }
@@ -530,9 +746,12 @@ export class EmailProcessor {
                 return;
             }
 
-            this.imap.addFlags(uid, '\\Seen', (err) => {
+            this.imap.addFlags(uid, '\\Seen', err => {
                 if (err) {
-                    console.error(`[EmailProcessor] Failed to mark email ${uid} as read:`, err);
+                    console.error(
+                        `[EmailProcessor] Failed to mark email ${uid} as read:`,
+                        err
+                    );
                     reject(err);
                 } else {
                     resolve();
@@ -562,4 +781,3 @@ export class EmailProcessor {
         return domainMap[domain.toLowerCase()] || null;
     }
 }
-

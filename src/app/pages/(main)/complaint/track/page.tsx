@@ -5,8 +5,11 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+
+// Mark this route as dynamic to prevent static generation
+export const dynamic = 'force-dynamic';
 import {
     AlertCircle,
     CheckCircle,
@@ -40,7 +43,7 @@ interface ComplaintMessage {
     created_at: string;
 }
 
-export default function ComplaintTrackPage() {
+function ComplaintTrackContent() {
     const searchParams = useSearchParams();
     const complaintNumber = searchParams.get('number') || '';
     const [complaint, setComplaint] = useState<Complaint | null>(null);
@@ -296,6 +299,21 @@ export default function ComplaintTrackPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function ComplaintTrackPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
+                    <p className="text-gray-400">Loading...</p>
+                </div>
+            </div>
+        }>
+            <ComplaintTrackContent />
+        </Suspense>
     );
 }
 

@@ -11,6 +11,8 @@ import type { Database } from '@/server/lib/types/database.types';
 
 type AssessmentRow = Database['public']['Tables']['assessments']['Row'];
 
+// Mark as dynamic since it uses cookies for authentication
+export const dynamic = 'force-dynamic';
 // Cache for 30 minutes (1800 seconds)
 export const revalidate = 1800;
 
@@ -93,9 +95,22 @@ export async function GET() {
         }
 
         // REQ-43: Revenue this month (from payment_id if available)
-        // Note: This would need integration with payment system
-        // For now, we'll use a placeholder or calculate from quote amounts
-        const revenueThisMonth = 0; // TODO: Calculate from payments/quotes
+        // Calculate from paid quote requests
+        const { data: revenueData } = await serverClient
+            .from('quote_requests')
+            .select('payment_amount')
+            .eq('status', 'payment_received')
+            .not('payment_amount', 'is', null)
+            .gte('paid_at', startOfCurrentMonth.toISOString())
+            .lte('paid_at', endOfCurrentMonth.toISOString());
+
+        let revenueThisMonth = 0;
+        if (revenueData && Array.isArray(revenueData)) {
+            revenueThisMonth = revenueData.reduce((sum, item) => {
+                const amount = typeof item.payment_amount === 'number' ? item.payment_amount : 0;
+                return sum + amount;
+            }, 0);
+        }
 
         // REQ-44: Overdue count (assessments older than 7 days in pending/processing)
         const sevenDaysAgo = new Date();
@@ -222,9 +237,28 @@ export async function GET() {
         const revenueByMonth: Array<{ month: string; revenue: number }> = [];
         for (let i = 11; i >= 0; i--) {
             const monthStart = startOfMonth(subMonths(now, i));
+            const monthEnd = endOfMonth(subMonths(now, i));
+            
+            // Calculate revenue for this month
+            const { data: monthRevenueData } = await serverClient
+                .from('quote_requests')
+                .select('payment_amount')
+                .eq('status', 'payment_received')
+                .not('payment_amount', 'is', null)
+                .gte('paid_at', monthStart.toISOString())
+                .lte('paid_at', monthEnd.toISOString());
+            
+            let monthRevenue = 0;
+            if (monthRevenueData && Array.isArray(monthRevenueData)) {
+                monthRevenue = monthRevenueData.reduce((sum, item) => {
+                    const amount = typeof item.payment_amount === 'number' ? item.payment_amount : 0;
+                    return sum + amount;
+                }, 0);
+            }
+            
             revenueByMonth.push({
                 month: format(monthStart, 'MMM yyyy'),
-                revenue: 0, // TODO: Calculate from payments
+                revenue: monthRevenue,
             });
         }
 

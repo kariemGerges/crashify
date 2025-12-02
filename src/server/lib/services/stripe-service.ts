@@ -5,14 +5,20 @@
 
 import Stripe from 'stripe';
 
-if (!process.env.STRIPE_SECRET_KEY) {
-    throw new Error('STRIPE_SECRET_KEY environment variable is required');
+/**
+ * Get Stripe client instance (lazy initialization)
+ * Checks for API key only when actually needed
+ */
+function getStripeClient(): Stripe {
+    const apiKey = process.env.STRIPE_SECRET_KEY;
+    if (!apiKey) {
+        throw new Error('STRIPE_SECRET_KEY environment variable is required');
+    }
+    return new Stripe(apiKey, {
+        apiVersion: '2025-11-17.clover',
+        typescript: true,
+    });
 }
-
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: '2024-12-18.acacia',
-    typescript: true,
-});
 
 export interface CreateCheckoutSessionParams {
     amount: number; // Amount in cents (e.g., 17500 for $175.00)
@@ -40,7 +46,7 @@ export class StripeService {
         params: CreateCheckoutSessionParams
     ): Promise<PaymentResult> {
         try {
-            const session = await stripe.checkout.sessions.create({
+            const session = await getStripeClient().checkout.sessions.create({
                 payment_method_types: ['card'],
                 mode: 'payment',
                 customer_email: params.customerEmail,
@@ -82,7 +88,7 @@ export class StripeService {
      */
     static async getCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session | null> {
         try {
-            const session = await stripe.checkout.sessions.retrieve(sessionId);
+            const session = await getStripeClient().checkout.sessions.retrieve(sessionId);
             return session;
         } catch (error) {
             console.error('[StripeService] Error retrieving checkout session:', error);
@@ -105,7 +111,7 @@ export class StripeService {
         }
 
         try {
-            const event = stripe.webhooks.constructEvent(
+            const event = getStripeClient().webhooks.constructEvent(
                 payload,
                 signature,
                 webhookSecret
@@ -128,7 +134,7 @@ export class StripeService {
             }
 
             if (typeof session.payment_intent === 'string') {
-                const paymentIntent = await stripe.paymentIntents.retrieve(
+                const paymentIntent = await getStripeClient().paymentIntents.retrieve(
                     session.payment_intent
                 );
                 return paymentIntent;

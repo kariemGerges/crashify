@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
-export default function PaymentSuccessPage() {
+// Mark this route as dynamic to prevent static generation
+export const dynamic = 'force-dynamic';
+
+function PaymentSuccessContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const sessionId = searchParams.get('session_id');
@@ -116,6 +119,21 @@ export default function PaymentSuccessPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function PaymentSuccessPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
+                    <p className="text-gray-400">Loading...</p>
+                </div>
+            </div>
+        }>
+            <PaymentSuccessContent />
+        </Suspense>
     );
 }
 

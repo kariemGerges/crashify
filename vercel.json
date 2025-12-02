@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/email-process",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}
+
