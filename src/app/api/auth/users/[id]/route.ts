@@ -65,13 +65,17 @@ export async function PATCH(
 
         // Log the action
         const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-            changed_by: currentUser.id,
+            user_id: currentUser.id,
             action: 'user_updated',
-            new_values: {
+            resource_type: 'user',
+            resource_id: userId,
+            details: {
                 updated_user_id: userId,
                 changes: updates,
             },
             ip_address: request.headers.get('x-forwarded-for'),
+            created_at: new Date().toISOString(),
+            success: true,
         };
         await (supabase.from('audit_logs') as unknown as {
             insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
@@ -233,10 +237,14 @@ export async function DELETE(
 
         // Log the action
         const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-            changed_by: currentUser.id,
+            user_id: currentUser.id,
             action: 'user_deleted',
-            new_values: { deleted_user_id: userId },
+            resource_type: 'user',
+            resource_id: userId,
+            details: { deleted_user_id: userId },
             ip_address: request.headers.get('x-forwarded-for'),
+            created_at: new Date().toISOString(),
+            success: true,
         };
         await (supabase.from('audit_logs') as unknown as {
             insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;

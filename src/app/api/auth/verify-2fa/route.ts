@@ -65,9 +65,11 @@ export async function POST(request: NextRequest) {
 
         if (!isValid) {
             const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-                changed_by: user.id,
+                user_id: user.id,
                 action: '2fa_failed',
                 ip_address: request.headers.get('x-forwarded-for'),
+                created_at: new Date().toISOString(),
+                success: false,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
@@ -100,9 +102,11 @@ export async function POST(request: NextRequest) {
 
         // Log successful 2FA
         const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-            changed_by: user.id,
+            user_id: user.id,
             action: '2fa_success',
             ip_address: ipAddress,
+            created_at: new Date().toISOString(),
+            success: true,
         };
         await (supabase.from('audit_logs') as unknown as {
             insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;

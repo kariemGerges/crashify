@@ -10,7 +10,7 @@ import { EmailService } from '@/server/lib/services/email-service';
 import { validateAndExtractIp } from '@/server/lib/utils/security';
 import type { Database } from '@/server/lib/types/database.types';
 
-type QuoteRequestUpdate = Database['public']['Tables']['quote_requests']['Update'];
+type QuoteRequestUpdate = { status?: string; approved_at?: string; updated_at?: string; [key: string]: unknown };
 
 export const runtime = 'nodejs';
 
@@ -34,11 +34,11 @@ export async function POST(
         }
 
         // Get quote request
-        const { data: quoteRequest, error: fetchError } = await supabase
+        const { data: quoteRequest, error: fetchError } = (await supabase
             .from('quote_requests')
             .select('*')
             .eq('id', quoteRequestId)
-            .single();
+            .single()) as { data: { id: string; status: string; email?: string; name?: string; [key: string]: unknown } | null; error: unknown };
 
         if (fetchError || !quoteRequest) {
             return NextResponse.json(
@@ -66,7 +66,7 @@ export async function POST(
 
         const { error: updateError } = await (supabase.from('quote_requests') as unknown as {
             update: (values: QuoteRequestUpdate) => {
-                eq: (column: string, value: string) => Promise<unknown>;
+                eq: (column: string, value: string) => Promise<{ error: unknown }>;
             };
         })
             .update(updateData)
@@ -76,7 +76,7 @@ export async function POST(
             return NextResponse.json(
                 {
                     error: 'Failed to update quote request',
-                    details: updateError.message,
+                    details: updateError instanceof Error ? updateError.message : 'Unknown error',
                 },
                 { status: 500 }
             );
@@ -91,8 +91,8 @@ export async function POST(
         const checkoutResult = await StripeService.createCheckoutSession({
             amount: Math.round(depositAmount * 100), // Convert to cents
             currency: 'aud',
-            customerEmail: quoteRequest.email,
-            customerName: quoteRequest.name,
+            customerEmail: quoteRequest.email || '',
+            customerName: (quoteRequest.name as string) || '',
             description: `${recommendedService} - Deposit (50%)`,
             metadata: {
                 quote_request_id: quoteRequestId,
@@ -167,7 +167,7 @@ export async function POST(
             `;
 
             await EmailService.sendEmail({
-                to: quoteRequest.email,
+                to: (quoteRequest.email as string) || '',
                 subject: `Your Crashify Quote - $${parseFloat(recommendedPrice.toString()).toLocaleString('en-AU')} ${recommendedService}`,
                 html: emailBody,
             });

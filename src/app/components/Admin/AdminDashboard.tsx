@@ -28,8 +28,12 @@ import Logo from '../logo';
 import Image from 'next/image';
 import Fady from '../../../../public/f.png';
 import { StatsOverview } from '../Admin/StatsOverview';
+import { EnhancedStatsOverview } from '../Admin/EnhancedStatsOverview';
 import { ClaimsTab } from '../Admin/ClaimsTab';
 import { QuoteRequestsTab } from '../Admin/QuoteRequestsTab';
+import { ComplaintsTab } from '../Admin/ComplaintsTab';
+import { SupplementaryRequestsTab } from '../Admin/SupplementaryRequestsTab';
+import { ReviewQueueTab } from '../Admin/ReviewQueueTab';
 import { useToast } from '../Toast';
 import { ConfirmModal } from '../Admin/ConfirmModal';
 
@@ -100,12 +104,18 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     // Get the color of the role badge
     const getRoleBadgeColor = (role: Role) => {
         switch (role) {
+            case 'super_admin':
+                return 'bg-purple-500/20 text-purple-400 border-purple-500/50';
             case 'admin':
                 return 'bg-red-500/20 text-red-400 border-red-500/50';
             case 'manager':
                 return 'bg-amber-500/20 text-amber-400 border-amber-500/50';
             case 'reviewer':
                 return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
+            case 'assessor':
+                return 'bg-green-500/20 text-green-400 border-green-500/50';
+            case 'read_only':
+                return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
             default:
                 return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
         }
@@ -117,38 +127,56 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             id: 'overview',
             icon: BarChart3,
             label: 'Overview',
-            roles: ['admin', 'manager', 'reviewer'],
+            roles: ['super_admin', 'admin', 'manager', 'reviewer', 'assessor', 'read_only'],
         },
         {
             id: 'claims',
             icon: FileText,
             label: 'Claims',
-            roles: ['admin', 'manager', 'reviewer'],
+            roles: ['super_admin', 'admin', 'manager', 'reviewer', 'assessor', 'read_only'],
+        },
+        {
+            id: 'complaints',
+            icon: MessageSquare,
+            label: 'Complaints',
+            roles: ['super_admin', 'admin', 'manager', 'reviewer', 'read_only'],
+        },
+        {
+            id: 'supplementary',
+            icon: FileText,
+            label: 'Supplementary Requests',
+            roles: ['super_admin', 'admin', 'manager', 'reviewer'],
+        },
+        {
+            id: 'review-queue',
+            icon: AlertCircle,
+            label: 'Review Queue',
+            roles: ['super_admin', 'admin', 'manager', 'reviewer'],
         },
         {
             id: 'claims-tokens',
             icon: FileText,
             label: 'Claims Tokens',
-            roles: ['admin', 'manager'],
+            roles: ['super_admin', 'admin', 'manager'],
         },
         {
             id: 'quote-requests',
             icon: Receipt,
             label: 'Quote Requests',
-            roles: ['admin', 'manager', 'reviewer'],
+            roles: ['super_admin', 'admin', 'manager', 'reviewer'],
         },
         {
             id: 'users',
             icon: Users,
             label: 'Users',
-            roles: ['admin', 'manager'],
+            roles: ['super_admin', 'admin', 'manager'],
         },
-        { id: 'settings', icon: Settings, label: 'Settings', roles: ['admin'] },
+        { id: 'settings', icon: Settings, label: 'Settings', roles: ['super_admin', 'admin'] },
     ];
 
     // Filter the menu items based on the user's role
     const filteredMenuItems = menuItems.filter(item =>
-        item.roles.includes(user.role)
+        item.roles.includes(user.role as Role)
     );
 
     // Load the users for the admin dashboard
@@ -455,11 +483,20 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                     <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
                                 </div>
                             ) : (
-                                <StatsOverview data={apiData} />
+                                <EnhancedStatsOverview />
                             ))}
 
                         {/* Claims Tab */}
                         {activeTab === 'claims' && <ClaimsTab />}
+
+                        {/* Complaints Tab */}
+                        {activeTab === 'complaints' && <ComplaintsTab />}
+
+                        {/* Supplementary Requests Tab */}
+                        {activeTab === 'supplementary' && <SupplementaryRequestsTab />}
+
+                        {/* Review Queue Tab */}
+                        {activeTab === 'review-queue' && <ReviewQueueTab />}
 
                         {/* Quote Requests Tab */}
                         {activeTab === 'quote-requests' && <QuoteRequestsTab />}

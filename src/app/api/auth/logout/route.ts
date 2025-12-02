@@ -9,9 +9,11 @@ export async function POST(request: NextRequest) {
 
         if (user) {
             const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-                changed_by: user.id,
+                user_id: user.id,
                 action: 'logout',
                 ip_address: request.headers.get('x-forwarded-for'),
+                created_at: new Date().toISOString(),
+                success: true,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;

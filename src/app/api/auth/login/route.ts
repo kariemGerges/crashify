@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/server/lib/supabase/client';
+import { createServerClient } from '@/server/lib/supabase/client';
 import { verifyPassword } from '@/server/lib/auth/password';
 import { createSession, createTempToken } from '@/server/lib/auth/session';
 import {
@@ -15,6 +15,8 @@ import {
     sanitizeEmail,
     isValidPasswordLength,
 } from '@/server/lib/utils/security';
+import { requireCsrfToken } from '@/server/lib/security/csrf';
+import { logLoginAttempt } from '@/server/lib/audit/logger';
 import type { Database } from '@/server/lib/types/database.types';
 
 // Extended user type to include fields not in generated types
@@ -25,11 +27,48 @@ type UserWithPassword = Database['public']['Tables']['users']['Row'] & {
 
 export async function POST(request: NextRequest) {
     try {
-        const { email, password } = await request.json();
+        // Verify CSRF token (REQ-132)
+        const csrfCheck = await requireCsrfToken(request);
+        if (!csrfCheck.valid) {
+            await logLoginAttempt(undefined, false, undefined, undefined, csrfCheck.error);
+            return NextResponse.json(
+                { error: csrfCheck.error || 'CSRF token validation failed' },
+                { status: 403 }
+            );
+        }
+
+        const { email, password, recaptchaToken } = await request.json();
+
+        // Verify reCAPTCHA (REQ-127)
+        if (recaptchaToken) {
+            try {
+                const recaptchaResponse = await fetch(
+                    `${request.nextUrl.origin}/api/auth/verify-recaptcha`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: recaptchaToken }),
+                    }
+                );
+
+                if (!recaptchaResponse.ok) {
+                    const recaptchaError = await recaptchaResponse.json();
+                    await logLoginAttempt(undefined, false, undefined, undefined, 'reCAPTCHA verification failed');
+                    return NextResponse.json(
+                        { error: recaptchaError.error || 'reCAPTCHA verification failed' },
+                        { status: 400 }
+                    );
+                }
+            } catch (recaptchaError) {
+                console.error('[LOGIN] reCAPTCHA verification error:', recaptchaError);
+                // Don't block login if reCAPTCHA service is down, but log it
+            }
+        }
 
         // Validate and sanitize IP address from header
         const rawIpHeader = request.headers.get('x-forwarded-for');
         const ipAddress = validateAndExtractIp(rawIpHeader);
+        const userAgent = request.headers.get('user-agent') || undefined;
 
         // Validate input
         if (!email || !password) {
@@ -89,9 +128,10 @@ export async function POST(request: NextRequest) {
             await new Promise(resolve => setTimeout(resolve, delay));
         }
 
-        // Supabase query builder is safe from SQL injection as it uses parameterized queries
-        // Note: Type assertion needed because generated types don't include password_hash and is_active
-        const { data: user, error } = (await supabase
+        // Use service role client to bypass RLS for login lookup
+        // RLS blocks user lookup during login because auth.uid() is null
+        const serverClient = createServerClient();
+        const { data: user, error } = (await serverClient
             .from('users')
             .select('*')
             .eq('email', sanitizedEmail)
@@ -102,8 +142,11 @@ export async function POST(request: NextRequest) {
         };
 
         if (error || !user) {
-            // Log failed attempt
+            // Log failed attempt (brute-force tracking)
             await recordLoginAttempt(sanitizedEmail, ipAddress, false);
+
+            // Log audit event (REQ-136)
+            await logLoginAttempt(undefined, false, ipAddress || undefined, userAgent || undefined, 'Invalid email or password');
 
             // Generic error message (don't reveal if email exists)
             return NextResponse.json(
@@ -119,7 +162,11 @@ export async function POST(request: NextRequest) {
         );
 
         if (!passwordValid) {
+            // Log failed attempt (brute-force tracking)
             await recordLoginAttempt(sanitizedEmail, ipAddress, false, user.id);
+
+            // Log audit event (REQ-136)
+            await logLoginAttempt(user.id, false, ipAddress || undefined, userAgent || undefined, 'Invalid password');
 
             // Generic error message
             return NextResponse.json(
@@ -142,16 +189,17 @@ export async function POST(request: NextRequest) {
         await resetFailedAttempts(sanitizedEmail);
 
         // Create session
-        const userAgent = request.headers.get('user-agent');
-
         await createSession(
             user.id,
             ipAddress || undefined,
-            userAgent || undefined
+            userAgent
         );
 
-        // Log successful login
+        // Log successful login (brute-force tracking)
         await recordLoginAttempt(sanitizedEmail, ipAddress, true, user.id);
+
+        // Log audit event (REQ-136)
+        await logLoginAttempt(user.id, true, ipAddress || undefined, userAgent || undefined);
 
         return NextResponse.json({
             user: {

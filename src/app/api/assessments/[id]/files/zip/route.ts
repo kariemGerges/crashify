@@ -120,14 +120,16 @@ export async function GET(
         try {
             const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
                 action: 'photos_zip_downloaded',
-                old_values: {},
-                new_values: {
+                resource_type: 'assessment',
+                resource_id: assessmentId,
+                details: {
                     assessment_id: assessmentId,
                     file_count: files.length,
                 },
                 ip_address: ipAddress || undefined,
                 user_agent: userAgent || undefined,
-                changed_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                success: true,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: Database['public']['Tables']['audit_logs']['Insert'][]) => Promise<unknown>;

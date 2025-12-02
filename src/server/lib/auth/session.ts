@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { supabase } from '@/server/lib/supabase/client';
+import { supabase, createServerClient } from '@/server/lib/supabase/client';
 import { randomBytes } from 'crypto';
 import type { User } from '@/server/lib/types/auth';
 import type { Database } from '@/server/lib/types/database.types';
@@ -8,13 +8,15 @@ type SessionInsert = Database['public']['Tables']['sessions']['Insert'];
 type UserUpdate = Database['public']['Tables']['users']['Update'];
 
 const SESSION_COOKIE_NAME = 'car_admin_session';
-const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours
+const SESSION_DURATION = 2 * 60 * 60 * 1000; // 2 hours (REQ-125)
 
 export async function createSession(
     userId: string,
     ipAddress?: string,
     userAgent?: string
 ): Promise<string> {
+    // Use service role client to bypass RLS for session creation
+    const serverClient = createServerClient();
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + SESSION_DURATION);
 
@@ -25,13 +27,14 @@ export async function createSession(
         ip_address: ipAddress ?? null,
         user_agent: userAgent ?? null,
     };
-    const { error } = await (supabase.from('sessions') as unknown as {
-        insert: (values: SessionInsert) => Promise<{
-            error: { message: string } | null;
-        }>;
-    }).insert(sessionData);
+    const { error } = await (serverClient.from('sessions') as unknown as {
+        insert: (values: SessionInsert[]) => Promise<{ error: { message: string } | null }>;
+    }).insert([sessionData]);
 
-    if (error) throw new Error('Failed to create session');
+    if (error) {
+        console.error('Failed to create session:', error);
+        throw new Error('Failed to create session');
+    }
 
     // Set HTTP-only secure cookie
     const cookieStore = await cookies();
@@ -60,21 +63,33 @@ export async function getSession(): Promise<User | null> {
 
     if (!token) return null;
 
-    const { data: session, error } = await (supabase.from('sessions') as unknown as {
-        select: (columns: string) => {
-            eq: (column: string, value: string) => {
-                single: () => Promise<{
-                    data: Database['public']['Tables']['sessions']['Row'] & { users: Database['public']['Tables']['users']['Row'] } | null;
-                    error: { message: string } | null;
-                }>;
+    // TEMPORARY FIX: Use service role client to bypass RLS for session lookup
+    // RLS blocks session lookup because auth.uid() is null during session validation
+    const serverClient = createServerClient();
+    const { data: session, error } = await (serverClient
+        .from('sessions') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string) => {
+                    single: () => Promise<{
+                        data: { 
+                            expires_at: string; 
+                            users: Database['public']['Tables']['users']['Row'] | null 
+                        } | null;
+                        error: { message: string } | null;
+                    }>;
+                };
             };
-        };
-    })
+        })
         .select('*, users(*)')
         .eq('token', token)
         .single();
 
-    if (error || !session) return null;
+    if (error || !session) {
+        if (error) {
+            console.error('Session lookup error:', error);
+        }
+        return null;
+    }
 
     // Check if session expired
     if (new Date(session.expires_at) < new Date()) {
@@ -83,6 +98,9 @@ export async function getSession(): Promise<User | null> {
     }
 
     const user = session.users;
+    if (!user) {
+        return null;
+    }
     return {
         id: user.id,
         email: user.email,

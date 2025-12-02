@@ -77,8 +77,7 @@ export async function POST(request: NextRequest) {
                 try {
                     const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
                         action: 'spam_detected',
-                        old_values: {},
-                        new_values: {
+                        details: {
                             email: formData.yourEmail,
                             spamScore: spamCheck.spamScore,
                             flags: spamCheck.flags,
@@ -86,7 +85,8 @@ export async function POST(request: NextRequest) {
                         },
                         ip_address: ipAddress || undefined,
                         user_agent: userAgent || undefined,
-                        changed_at: new Date().toISOString(),
+                        created_at: new Date().toISOString(),
+                        success: false,
                     };
                     await (supabase.from('audit_logs') as unknown as {
                         insert: (values: Database['public']['Tables']['audit_logs']['Insert'][]) => Promise<unknown>;

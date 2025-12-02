@@ -34,22 +34,22 @@ export async function isAccountLocked(
                 eq: (column: string, value: string) => {
                     gte: (column: string, value: string) => {
                         order: (column: string, options: { ascending: boolean }) => Promise<{
-                            data: Array<{ changed_at: string; new_values: Database['public']['Tables']['audit_logs']['Row']['new_values'] }> | null;
+                            data: Array<{ created_at: string; details: Database['public']['Tables']['audit_logs']['Row']['details'] }> | null;
                         }>;
                     };
                 };
             };
         })
-        .select('changed_at, new_values')
+        .select('created_at, details')
         .eq('action', 'login_failed')
-        .gte('changed_at', fifteenMinutesAgo.toISOString())
-        .order('changed_at', { ascending: false });
+        .gte('created_at', fifteenMinutesAgo.toISOString())
+        .order('created_at', { ascending: false });
 
     if (!allAttempts) return { locked: false };
 
     // Filter attempts for this specific email
     const failedAttempts = allAttempts.filter((attempt) => {
-        const details = attempt.new_values;
+        const details = attempt.details;
         return details && typeof details === 'object' && details !== null && 'email' in details && details.email === lowerEmail;
     });
 
@@ -60,7 +60,7 @@ export async function isAccountLocked(
     // Check if there's been a successful login after the oldest failed attempt
     // If so, the failed attempts are effectively "cleared"
     const oldestFailedAttempt = failedAttempts[failedAttempts.length - 1];
-    const oldestFailedTime = new Date(oldestFailedAttempt.changed_at);
+    const oldestFailedTime = new Date(oldestFailedAttempt.created_at);
 
     const { data: successAttempts } = await (supabase
         .from('audit_logs') as unknown as {
@@ -68,21 +68,21 @@ export async function isAccountLocked(
                 eq: (column: string, value: string) => {
                     gte: (column: string, value: string) => {
                         order: (column: string, options: { ascending: boolean }) => Promise<{
-                            data: Array<{ changed_at: string; new_values: Database['public']['Tables']['audit_logs']['Row']['new_values'] }> | null;
+                            data: Array<{ created_at: string; details: Database['public']['Tables']['audit_logs']['Row']['details'] }> | null;
                         }>;
                     };
                 };
             };
         })
-        .select('changed_at, new_values')
-        .eq('action', 'login_success')
-        .gte('changed_at', oldestFailedTime.toISOString())
-        .order('changed_at', { ascending: false });
+        .select('created_at, details')
+        .eq('action', 'login')
+        .gte('created_at', oldestFailedTime.toISOString())
+        .order('created_at', { ascending: false });
 
     if (successAttempts) {
         // Check if any successful login is for this email and happened after failed attempts
         const hasRecentSuccess = successAttempts.some((attempt) => {
-            const details = attempt.new_values;
+            const details = attempt.details;
             return details && typeof details === 'object' && details !== null && 'email' in details && details.email === lowerEmail;
         });
 
@@ -117,22 +117,22 @@ export async function getProgressiveDelay(
                 eq: (column: string, value: string) => {
                     gte: (column: string, value: string) => {
                         order: (column: string, options: { ascending: boolean }) => Promise<{
-                            data: Array<{ new_values: Database['public']['Tables']['audit_logs']['Row']['new_values'] }> | null;
+                            data: Array<{ details: Database['public']['Tables']['audit_logs']['Row']['details'] }> | null;
                         }>;
                     };
                 };
             };
         })
-        .select('new_values')
+        .select('details')
         .eq('action', 'login_failed')
-        .gte('changed_at', fiveMinutesAgo.toISOString())
-        .order('changed_at', { ascending: false });
+        .gte('created_at', fiveMinutesAgo.toISOString())
+        .order('created_at', { ascending: false });
 
     if (!allAttempts) return 0;
 
     // Filter attempts for this specific email
     const attempts = allAttempts.filter((attempt) => {
-        const details = attempt.new_values;
+        const details = attempt.details;
         return details && typeof details === 'object' && details !== null && 'email' in details && details.email === lowerEmail;
     });
 
@@ -175,7 +175,7 @@ export async function isIpBlocked(
         .select('id')
         .eq('action', 'login_failed')
         .eq('ip_address', ipAddress)
-        .gte('changed_at', oneHourAgo.toISOString());
+        .gte('created_at', oneHourAgo.toISOString());
 
     // Block IP if more than 20 failed attempts in an hour
     return attempts ? attempts.length > 20 : false;
@@ -191,13 +191,14 @@ export async function recordLoginAttempt(
     userId?: string
 ): Promise<void> {
     const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-        changed_by: userId || null,
-        action: success ? 'login_success' : 'login_failed',
-        new_values: success
+        user_id: userId || null,
+        action: success ? 'login' : 'login_failed',
+        details: success
             ? { email: email.toLowerCase() }
             : { email: email.toLowerCase(), reason: 'invalid_credentials' },
         ip_address: ipAddress,
-        changed_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        success: success,
     };
     await (supabase.from('audit_logs') as unknown as {
         insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;

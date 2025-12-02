@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/server/lib/supabase/client';
+import { supabase, createServerClient } from '@/server/lib/supabase/client';
 import {
     hashPassword,
     validatePasswordStrength,
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Validate role
-        const validRoles = ['admin', 'manager', 'reviewer'];
+        const validRoles = ['super_admin', 'admin', 'manager', 'reviewer'];
         if (!validRoles.includes(role)) {
             return NextResponse.json(
                 { error: 'Invalid role specified' },
@@ -70,16 +70,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Use service role client to bypass RLS (we've already verified user is admin)
+        const serverClient = createServerClient();
+
         // Check if user already exists
-        const { data: existingUser } = await (supabase.from('users') as unknown as {
-            select: (columns: string) => {
-                eq: (column: string, value: string) => {
-                    single: () => Promise<{
-                        data: Pick<Database['public']['Tables']['users']['Row'], 'id'> | null;
-                    }>;
-                };
-            };
-        })
+        const { data: existingUser } = await serverClient
+            .from('users')
             .select('id')
             .eq('email', email.toLowerCase())
             .single();
@@ -101,8 +97,12 @@ export async function POST(request: NextRequest) {
             twoFactorSecret = secret.base32;
         }
 
-        // Create user
-        const userInsert: Database['public']['Tables']['users']['Insert'] & { password_hash: string; two_factor_secret: string | null; is_active: boolean } = {
+        // Create user using service role client (bypasses RLS)
+        const userInsert: Database['public']['Tables']['users']['Insert'] & {
+            password_hash: string;
+            two_factor_secret: string | null;
+            is_active: boolean;
+        } = {
             email: email.toLowerCase(),
             name,
             password_hash: passwordHash,
@@ -111,16 +111,20 @@ export async function POST(request: NextRequest) {
             two_factor_secret: twoFactorSecret,
             is_active: true,
         };
-        const { data: newUser, error } = await (supabase.from('users') as unknown as {
-            insert: (values: typeof userInsert[]) => {
-                select: () => {
-                    single: () => Promise<{
-                        data: Database['public']['Tables']['users']['Row'] | null;
-                        error: { message: string } | null;
-                    }>;
+        const { data: newUser, error } = await (
+            serverClient.from('users') as unknown as {
+                insert: (values: (typeof userInsert)[]) => {
+                    select: () => {
+                        single: () => Promise<{
+                            data:
+                                | Database['public']['Tables']['users']['Row']
+                                | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
                 };
-            };
-        })
+            }
+        )
             .insert([userInsert])
             .select()
             .single();
@@ -134,19 +138,28 @@ export async function POST(request: NextRequest) {
         }
 
         // Log the action
-        const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-            changed_by: currentUser.id,
-            action: 'user_created',
-            new_values: {
-                created_user_id: newUser.id,
-                email: newUser.email,
-                role: newUser.role,
-            },
-            ip_address: request.headers.get('x-forwarded-for'),
-        };
-        await (supabase.from('audit_logs') as unknown as {
-            insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
-        }).insert(auditLogInsert);
+        const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] =
+            {
+                user_id: currentUser.id,
+                action: 'user_created',
+                resource_type: 'user',
+                resource_id: newUser.id,
+                details: {
+                    created_user_id: newUser.id,
+                    email: newUser.email,
+                    role: newUser.role,
+                },
+                ip_address: request.headers.get('x-forwarded-for'),
+                created_at: new Date().toISOString(),
+                success: true,
+            };
+        await (
+            supabase.from('audit_logs') as unknown as {
+                insert: (
+                    values: Database['public']['Tables']['audit_logs']['Insert']
+                ) => Promise<unknown>;
+            }
+        ).insert(auditLogInsert);
 
         // If 2FA is enabled, send setup email automatically
         if (newUser.two_factor_enabled && twoFactorSecret) {
@@ -154,7 +167,9 @@ export async function POST(request: NextRequest) {
                 // Generate OTP Auth URL
                 const otpauthUrl = speakeasy.otpauthURL({
                     secret: twoFactorSecret,
-                    label: encodeURIComponent(`CarInsure Admin (${newUser.email})`),
+                    label: encodeURIComponent(
+                        `CarInsure Admin (${newUser.email})`
+                    ),
                     issuer: 'CarInsure',
                     encoding: 'base32',
                 });

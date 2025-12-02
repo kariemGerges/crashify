@@ -7,7 +7,6 @@ import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { createServerClient } from '@/server/lib/supabase/client';
 import type { Database } from '@/server/lib/types/database.types';
-import pdfParse from 'pdf-parse';
 
 type AssessmentInsert = Database['public']['Tables']['assessments']['Insert'];
 type UploadedFileInsert = Database['public']['Tables']['uploaded_files']['Insert'];
@@ -303,7 +302,7 @@ export class EmailProcessor {
         }
 
         // Extract incident description
-        const incidentMatch = text.match(/Incident:?\s*(.*?)(?:\n\n|\n[A-Z]|$)/is);
+        const incidentMatch = text.match(/Incident:?\s*([\s\S]*?)(?:\n\n|\n[A-Z]|$)/i);
         if (incidentMatch) {
             data.incidentDescription = incidentMatch[1].trim();
         }
@@ -316,6 +315,8 @@ export class EmailProcessor {
      */
     private async extractDataFromPDF(pdfBuffer: Buffer): Promise<Partial<ExtractedData>> {
         try {
+            const pdfParseModule = await import('pdf-parse');
+            const pdfParse = (pdfParseModule as any).default || pdfParseModule;
             const data = await pdfParse(pdfBuffer);
             const text = data.text;
 
@@ -405,7 +406,7 @@ export class EmailProcessor {
         const companyName = this.getCompanyNameFromDomain(domain) || fromName || domain;
 
         // Parse owner info
-        const ownerInfo: any = {};
+        const ownerInfo: Record<string, string> = {};
         if (extractedData.insuredName) {
             const nameParts = extractedData.insuredName.split(' ');
             ownerInfo.firstName = nameParts[0] || '';

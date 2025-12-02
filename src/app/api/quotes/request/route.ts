@@ -9,7 +9,7 @@ import { SpamDetector } from '@/server/lib/services/spam-detector';
 import { validateAndExtractIp } from '@/server/lib/utils/security';
 import type { Database } from '@/server/lib/types/database.types';
 
-type QuoteRequestInsert = Database['public']['Tables']['quote_requests']['Insert'];
+type QuoteRequestInsert = { [key: string]: unknown };
 type AuditLogInsert = Database['public']['Tables']['audit_logs']['Insert'];
 
 const BUCKET_NAME = 'Assessment-photos';
@@ -83,8 +83,7 @@ export async function POST(request: NextRequest) {
             try {
                 const auditLogInsert: AuditLogInsert = {
                     action: 'quote_request_spam_detected',
-                    old_values: {},
-                    new_values: {
+                    details: {
                         email,
                         spamScore: spamCheck.spamScore,
                         flags: spamCheck.flags,
@@ -92,7 +91,8 @@ export async function POST(request: NextRequest) {
                     },
                     ip_address: ipAddress || undefined,
                     user_agent: userAgent || undefined,
-                    changed_at: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
+                    success: false,
                 };
                 await (supabase.from('audit_logs') as unknown as {
                     insert: (values: AuditLogInsert[]) => Promise<unknown>;
@@ -207,15 +207,15 @@ export async function POST(request: NextRequest) {
         try {
             const auditLogInsert: AuditLogInsert = {
                 action: 'quote_request_submitted',
-                old_values: {},
-                new_values: {
+                details: {
                     quote_request_id: quoteRequest.id,
                     email,
                     spamScore: spamCheck.spamScore,
                 },
                 ip_address: ipAddress || undefined,
                 user_agent: userAgent || undefined,
-                changed_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                success: true,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: AuditLogInsert[]) => Promise<unknown>;

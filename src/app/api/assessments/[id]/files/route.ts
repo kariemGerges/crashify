@@ -97,14 +97,16 @@ async function logAuditEvent(
     try {
         const auditLog: AuditLogInsert = {
             action,
-            assessment_id: assessmentId,
-            new_values: {
+            resource_type: 'assessment',
+            resource_id: assessmentId,
+            details: {
                 assessmentId,
                 ...metadata,
             },
             ip_address: ipAddress,
             user_agent: userAgent,
-            changed_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            success: true,
         };
 
         await (

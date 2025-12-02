@@ -194,8 +194,7 @@ export const IQHelper: React.FC<IQHelperProps> = ({
 
     const handleMarkAsEntered = async () => {
         const confirmed = await showConfirm(
-            'Mark this assessment as entered in IQ Controls?',
-            iqReference ? `IQ Controls Reference: ${iqReference}` : undefined
+            `Mark this assessment as entered in IQ Controls?${iqReference ? `\nIQ Controls Reference: ${iqReference}` : ''}`
         );
         
         if (!confirmed) return;

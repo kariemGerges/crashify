@@ -128,9 +128,9 @@ export async function GET(request: NextRequest) {
         try {
             const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] =
                 {
-                    changed_by: currentUser.id,
+                    user_id: currentUser.id,
                     action: 'tokens_listed',
-                    new_values: {
+                    details: {
                         page,
                         limit,
                         totalResults: total,
@@ -139,7 +139,8 @@ export async function GET(request: NextRequest) {
                     },
                     ip_address: ipAddress,
                     user_agent: userAgent,
-                    changed_at: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
+                    success: true,
                 };
             await (
                 supabase.from('audit_logs') as unknown as {
@@ -173,13 +174,14 @@ export async function GET(request: NextRequest) {
                 const ipAddress = validateAndExtractIp(rawIpHeader);
                 const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] =
                     {
-                        changed_by: currentUser.id,
+                        user_id: currentUser.id,
                         action: 'token_list_failed',
-                        new_values: {
+                        details: {
                             error: 'Token list fetch failed',
                         },
                         ip_address: ipAddress,
-                        changed_at: new Date().toISOString(),
+                        created_at: new Date().toISOString(),
+                        success: false,
                     };
                 await (
                     supabase.from('audit_logs') as unknown as {

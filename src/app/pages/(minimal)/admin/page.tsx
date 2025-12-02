@@ -5,7 +5,7 @@ import { api } from '@/app/actions/getUser';
 import { Loader2 } from 'lucide-react';
 import { AdminDashboard } from '@/app/components/Admin/AdminDashboard';
 import { TwoFactorAuth } from '@/app/components/Auth/TwoFactorAuth';
-import { LoginForm } from '@/app/components/Auth/LoginForm';
+import { LoginFormWithSecurity } from '@/app/components/Auth/LoginFormWithSecurity';
 import { ToastProvider } from '@/app/components/Toast';
 
 // const Admin: React.FC = () => {
@@ -85,7 +85,7 @@ export default function Admin() {
                     onBack={handleBackToLogin}
                 />
             ) : (
-                <LoginForm onLoginSuccess={handleLoginSuccess} />
+                <LoginFormWithSecurity onLoginSuccess={handleLoginSuccess} />
             )}
         </ToastProvider>
     );

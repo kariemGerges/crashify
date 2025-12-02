@@ -8,7 +8,7 @@ import { createServerClient } from '@/server/lib/supabase/client';
 import { randomBytes } from 'crypto';
 import type { Database } from '@/server/lib/types/database.types';
 
-type SecureFormLinkInsert = Database['public']['Tables']['secure_form_links']['Insert'];
+type SecureFormLinkInsert = { token: string; quote_request_id: string; expires_at: string; is_used: boolean; metadata?: Record<string, unknown> };
 
 export const runtime = 'nodejs';
 
@@ -22,11 +22,11 @@ export async function POST(
         const { id: quoteRequestId } = await params;
 
         // Verify quote request exists and payment received
-        const { data: quoteRequest, error: fetchError } = await supabase
+        const { data: quoteRequest, error: fetchError } = (await supabase
             .from('quote_requests')
             .select('*')
             .eq('id', quoteRequestId)
-            .single();
+            .single()) as { data: { id: string; status: string; [key: string]: unknown } | null; error: unknown };
 
         if (fetchError || !quoteRequest) {
             return NextResponse.json(
@@ -43,13 +43,13 @@ export async function POST(
         }
 
         // Check if secure link already exists and is valid
-        const { data: existingLink } = await supabase
+        const { data: existingLink } = (await supabase
             .from('secure_form_links')
             .select('*')
             .eq('quote_request_id', quoteRequestId)
             .eq('is_used', false)
             .gt('expires_at', new Date().toISOString())
-            .single();
+            .single()) as { data: { token: string; [key: string]: unknown } | null };
 
         if (existingLink) {
             const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

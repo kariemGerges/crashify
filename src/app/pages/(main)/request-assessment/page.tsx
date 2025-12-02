@@ -1,7 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, Loader2, AlertCircle, CheckCircle, Shield } from 'lucide-react';
+import {
+    Upload,
+    Loader2,
+    AlertCircle,
+    CheckCircle,
+    Shield,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
@@ -43,7 +49,10 @@ export default function RequestAssessmentPage() {
             setError('Vehicle information is required');
             return false;
         }
-        if (!formData.description.trim() || formData.description.trim().length < 10) {
+        if (
+            !formData.description.trim() ||
+            formData.description.trim().length < 10
+        ) {
             setError('Please provide a description of at least 10 characters');
             return false;
         }
@@ -78,7 +87,7 @@ export default function RequestAssessmentPage() {
             data.append('submitTimeSeconds', submitTimeSeconds.toString());
 
             // Add files
-            files.forEach((file) => {
+            files.forEach(file => {
                 data.append('photos', file);
             });
 
@@ -94,13 +103,15 @@ export default function RequestAssessmentPage() {
             }
 
             setSuccess(true);
-            
+
             // Redirect after 3 seconds
             setTimeout(() => {
                 router.push('/');
             }, 3000);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to submit request');
+            setError(
+                err instanceof Error ? err.message : 'Failed to submit request'
+            );
         } finally {
             setSubmitting(false);
         }
@@ -108,8 +119,10 @@ export default function RequestAssessmentPage() {
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = Array.from(e.target.files || []);
-        const imageFiles = selectedFiles.filter(file => file.type.startsWith('image/'));
-        
+        const imageFiles = selectedFiles.filter(file =>
+            file.type.startsWith('image/')
+        );
+
         if (imageFiles.length + files.length > 30) {
             setError('Maximum 30 photos allowed');
             return;
@@ -133,7 +146,9 @@ export default function RequestAssessmentPage() {
         setIsDragging(false);
 
         const droppedFiles = Array.from(e.dataTransfer.files);
-        const imageFiles = droppedFiles.filter(file => file.type.startsWith('image/'));
+        const imageFiles = droppedFiles.filter(file =>
+            file.type.startsWith('image/')
+        );
 
         if (imageFiles.length + files.length > 30) {
             setError('Maximum 30 photos allowed');
@@ -164,19 +179,29 @@ export default function RequestAssessmentPage() {
                                 Request an Assessment Quote
                             </h1>
                             <p className="text-gray-400">
-                                Fill out the form below and we'll get back to you within 2 hours with pricing
+                                Fill out the form below and we&apos;ll get back
+                                to you within 2 hours with pricing
                             </p>
                         </div>
 
                         {success ? (
                             <div className="text-center py-12">
                                 <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                                <h2 className="text-2xl font-bold text-white mb-2">Request Received!</h2>
+                                <h2 className="text-2xl font-bold text-white mb-2">
+                                    Request Received!
+                                </h2>
                                 <p className="text-gray-400 mb-6">
-                                    We'll review your request and email you within 2 hours with pricing and next steps.
+                                    We&apos;ll review your request and email you
+                                    within 2 hours with pricing and next steps.
                                 </p>
                                 <p className="text-gray-500 text-sm">
-                                    If urgent, call us: <a href="tel:0426000910" className="text-amber-500 hover:text-amber-400">0426 000 910</a>
+                                    If urgent, call us:{' '}
+                                    <a
+                                        href="tel:0426000910"
+                                        className="text-amber-500 hover:text-amber-400"
+                                    >
+                                        0426 000 910
+                                    </a>
                                 </p>
                             </div>
                         ) : (
@@ -184,19 +209,27 @@ export default function RequestAssessmentPage() {
                                 {error && (
                                     <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-start gap-3">
                                         <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                                        <p className="text-red-400 text-sm">{error}</p>
+                                        <p className="text-red-400 text-sm">
+                                            {error}
+                                        </p>
                                     </div>
                                 )}
 
                                 {/* Name */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Your Name <span className="text-red-500">*</span>
+                                        Your Name{' '}
+                                        <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        onChange={e =>
+                                            setFormData({
+                                                ...formData,
+                                                name: e.target.value,
+                                            })
+                                        }
                                         required
                                         className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-amber-500 transition-colors"
                                         placeholder="John Smith"
@@ -206,12 +239,18 @@ export default function RequestAssessmentPage() {
                                 {/* Email */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Your Email <span className="text-red-500">*</span>
+                                        Your Email{' '}
+                                        <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="email"
                                         value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        onChange={e =>
+                                            setFormData({
+                                                ...formData,
+                                                email: e.target.value,
+                                            })
+                                        }
                                         required
                                         className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-amber-500 transition-colors"
                                         placeholder="john@example.com"
@@ -221,12 +260,18 @@ export default function RequestAssessmentPage() {
                                 {/* Phone */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Your Phone <span className="text-red-500">*</span>
+                                        Your Phone{' '}
+                                        <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="tel"
                                         value={formData.phone}
-                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                        onChange={e =>
+                                            setFormData({
+                                                ...formData,
+                                                phone: e.target.value,
+                                            })
+                                        }
                                         required
                                         className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-amber-500 transition-colors"
                                         placeholder="04XX XXX XXX"
@@ -236,12 +281,18 @@ export default function RequestAssessmentPage() {
                                 {/* Vehicle */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Vehicle (Make/Model) <span className="text-red-500">*</span>
+                                        Vehicle (Make/Model){' '}
+                                        <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.vehicle}
-                                        onChange={(e) => setFormData({ ...formData, vehicle: e.target.value })}
+                                        onChange={e =>
+                                            setFormData({
+                                                ...formData,
+                                                vehicle: e.target.value,
+                                            })
+                                        }
                                         required
                                         className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-amber-500 transition-colors"
                                         placeholder="e.g., 2020 Toyota Camry"
@@ -251,11 +302,17 @@ export default function RequestAssessmentPage() {
                                 {/* Description */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        What happened? <span className="text-red-500">*</span>
+                                        What happened?{' '}
+                                        <span className="text-red-500">*</span>
                                     </label>
                                     <textarea
                                         value={formData.description}
-                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                        onChange={e =>
+                                            setFormData({
+                                                ...formData,
+                                                description: e.target.value,
+                                            })
+                                        }
                                         required
                                         rows={4}
                                         className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-amber-500 transition-colors resize-none"
@@ -269,7 +326,8 @@ export default function RequestAssessmentPage() {
                                 {/* Photo Upload */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Upload Damage Photos <span className="text-red-500">*</span>
+                                        Upload Damage Photos{' '}
+                                        <span className="text-red-500">*</span>
                                     </label>
                                     <div
                                         onDragOver={handleDragOver}
@@ -283,7 +341,8 @@ export default function RequestAssessmentPage() {
                                     >
                                         <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                                         <p className="text-gray-400 text-sm mb-2">
-                                            Drag & drop photos here, or click to select
+                                            Drag & drop photos here, or click to
+                                            select
                                         </p>
                                         <p className="text-gray-500 text-xs mb-4">
                                             Up to 30 photos, max 10MB each
@@ -312,18 +371,27 @@ export default function RequestAssessmentPage() {
                                                     className="relative group bg-gray-800 rounded-lg overflow-hidden"
                                                 >
                                                     <img
-                                                        src={URL.createObjectURL(file)}
-                                                        alt={`Photo ${index + 1}`}
+                                                        src={URL.createObjectURL(
+                                                            file
+                                                        )}
+                                                        alt={`Photo ${
+                                                            index + 1
+                                                        }`}
                                                         className="w-full h-24 object-cover"
                                                     />
                                                     <button
                                                         type="button"
-                                                        onClick={() => removeFile(index)}
+                                                        onClick={() =>
+                                                            removeFile(index)
+                                                        }
                                                         className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                                                     >
                                                         <AlertCircle className="w-4 h-4" />
                                                     </button>
-                                                    <p className="text-xs text-gray-400 p-1 truncate" title={file.name}>
+                                                    <p
+                                                        className="text-xs text-gray-400 p-1 truncate"
+                                                        title={file.name}
+                                                    >
                                                         {file.name}
                                                     </p>
                                                 </div>
@@ -352,7 +420,8 @@ export default function RequestAssessmentPage() {
                                 </button>
 
                                 <p className="text-gray-500 text-xs text-center">
-                                    By submitting, you agree to our Terms of Service and Privacy Policy
+                                    By submitting, you agree to our Terms of
+                                    Service and Privacy Policy
                                 </p>
                             </form>
                         )}
@@ -363,4 +432,3 @@ export default function RequestAssessmentPage() {
         </>
     );
 }
-

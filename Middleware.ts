@@ -43,16 +43,35 @@ export async function middleware(request: NextRequest) {
 
         const { user } = await response.json();
 
-        // Role-based access control
-        if (pathname.startsWith('/admin/settings') && user.role !== 'admin') {
-            return NextResponse.redirect(new URL('/admin', request.url));
+        // Role-based access control (REQ-128)
+        // Super Admin has access to everything
+        if (user.role === 'super_admin') {
+            return NextResponse.next();
         }
 
-        if (
-            pathname.startsWith('/admin/users') &&
-            !['admin', 'manager'].includes(user.role)
-        ) {
-            return NextResponse.redirect(new URL('/admin', request.url));
+        // Admin settings - only admin and super_admin
+        if (pathname.startsWith('/admin/settings')) {
+            if (!['admin', 'super_admin'].includes(user.role)) {
+                return NextResponse.redirect(new URL('/admin', request.url));
+            }
+        }
+
+        // User management - admin, super_admin, and manager
+        if (pathname.startsWith('/admin/users')) {
+            if (!['admin', 'super_admin', 'manager'].includes(user.role)) {
+                return NextResponse.redirect(new URL('/admin', request.url));
+            }
+        }
+
+        // Read-only role - can only view, no modifications
+        if (user.role === 'read_only') {
+            // Block all POST/PUT/DELETE/PATCH requests
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+                return NextResponse.json(
+                    { error: 'Read-only access: modifications not allowed' },
+                    { status: 403 }
+                );
+            }
         }
     }
 

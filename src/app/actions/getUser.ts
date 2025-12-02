@@ -3,12 +3,17 @@ import { Role } from '@/server/lib/types/auth';
 const API_BASE = '/api';
 
 export const api = {
-    login: async (email: string, password: string) => {
+    login: async (email: string, password: string, csrfToken?: string | null, recaptchaToken?: string | null) => {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (csrfToken) {
+            headers['x-csrf-token'] = csrfToken;
+        }
+
         const response = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             credentials: 'include',
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email, password, recaptchaToken }),
         });
 
         if (!response.ok) {

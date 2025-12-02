@@ -52,12 +52,13 @@ export async function POST(request: NextRequest) {
             try {
                 const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
                     action: 'token_validation_failed',
-                    new_values: {
+                    details: {
                         reason: 'missing_token',
                     },
                     ip_address: ipAddress,
                     user_agent: userAgent,
-                    changed_at: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
+                    success: false,
                 };
                 await (supabase.from('audit_logs') as unknown as {
                     insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
@@ -81,13 +82,14 @@ export async function POST(request: NextRequest) {
             try {
                 const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
                     action: 'token_validation_failed',
-                    new_values: {
+                    details: {
                         reason: 'invalid_format',
                         tokenLength: token.length,
                     },
                     ip_address: ipAddress,
                     user_agent: userAgent,
-                    changed_at: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
+                    success: false,
                 };
                 await (supabase.from('audit_logs') as unknown as {
                     insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
@@ -119,13 +121,14 @@ export async function POST(request: NextRequest) {
             try {
                 const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
                     action: 'token_validation_failed',
-                    new_values: {
+                    details: {
                         reason: validation.errorCode || 'invalid',
                         errorCode: validation.errorCode,
                     },
                     ip_address: ipAddress,
                     user_agent: userAgent,
-                    changed_at: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
+                    success: false,
                 };
                 await (supabase.from('audit_logs') as unknown as {
                     insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
@@ -160,14 +163,15 @@ export async function POST(request: NextRequest) {
         try {
             const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
                 action: 'token_validated',
-                new_values: {
+                details: {
                     tokenId: validation.token!.id,
                     customerId: validation.token!.customerId,
                     claimType: validation.token!.claimType,
                 },
                 ip_address: ipAddress,
                 user_agent: userAgent,
-                changed_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                success: true,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
@@ -198,11 +202,12 @@ export async function POST(request: NextRequest) {
             const ipAddress = validateAndExtractIp(rawIpHeader);
             const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
                 action: 'token_validation_error',
-                new_values: {
+                details: {
                     error: 'Validation process failed',
                 },
                 ip_address: ipAddress,
-                changed_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                success: false,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/server/lib/supabase/client';
+import { createServerClient } from '@/server/lib/supabase/client';
 import { getSession } from '@/server/lib/auth/session';
 
 export async function GET(request: NextRequest) {
@@ -31,8 +31,11 @@ export async function GET(request: NextRequest) {
 
         const offset = (page - 1) * limit;
 
+        // Use service role client to bypass RLS (we've already verified user is admin/manager)
+        const serverClient = createServerClient();
+
         // Build query
-        let query = supabase
+        let query = serverClient
             .from('users')
             .select(
                 'id, email, name, role, two_factor_enabled, is_active, last_login, created_at',

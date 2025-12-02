@@ -202,8 +202,7 @@ export const EmailAutomation: React.FC<EmailAutomationProps> = ({
         if (!validateForm()) return;
 
         const confirmed = await showConfirm(
-            'Send emails to recipients?',
-            `This will send emails to:\n${repairerEmail ? `- Repairer: ${repairerEmail}\n` : ''}${insuranceEmail ? `- Insurance: ${insuranceEmail}` : ''}`
+            `Send emails to recipients?\nThis will send emails to:\n${repairerEmail ? `- Repairer: ${repairerEmail}\n` : ''}${insuranceEmail ? `- Insurance: ${insuranceEmail}` : ''}`
         );
 
         if (!confirmed) return;

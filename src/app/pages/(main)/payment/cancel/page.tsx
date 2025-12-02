@@ -18,7 +18,7 @@ export default function PaymentCancelPage() {
                     Your payment was cancelled. No charges have been made.
                 </p>
                 <p className="text-gray-500 text-sm mb-6">
-                    If you'd like to proceed with your assessment, you can try again or contact us directly.
+                    If you&apos;d like to proceed with your assessment, you can try again or contact us directly.
                 </p>
                 <div className="flex flex-col gap-3">
                     {quoteRequestId && (

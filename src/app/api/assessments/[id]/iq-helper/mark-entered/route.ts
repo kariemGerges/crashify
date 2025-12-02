@@ -42,12 +42,12 @@ export async function POST(
         }
 
         // Verify assessment exists
-        const { data: assessment, error: assessmentError } = await supabase
+        const { data: assessment, error: assessmentError } = (await supabase
             .from('assessments')
-            .select('id, status')
+            .select('id, status, internal_notes')
             .eq('id', assessmentId)
             .is('deleted_at', null)
-            .single();
+            .single()) as { data: { id: string; status: string; internal_notes?: string | null } | null; error: unknown };
 
         if (assessmentError || !assessment) {
             return NextResponse.json(
@@ -107,17 +107,18 @@ export async function POST(
         try {
             const auditLogInsert: AuditLogInsert = {
                 action: 'marked_entered_iq_controls',
-                old_values: {
-                    status: assessment.status,
-                },
-                new_values: {
-                    status: 'processing',
+                resource_type: 'assessment',
+                resource_id: assessmentId,
+                details: {
+                    old_status: assessment.status,
+                    new_status: 'processing',
                     iq_reference: iqReference || null,
                     entered_at: new Date().toISOString(),
                 },
                 ip_address: ipAddress || undefined,
                 user_agent: userAgent || undefined,
-                changed_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                success: true,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: AuditLogInsert[]) => Promise<unknown>;

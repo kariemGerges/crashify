@@ -194,41 +194,6 @@ export interface Database {
                     metadata?: Json;
                 };
             };
-            audit_logs: {
-                Row: {
-                    id: string;
-                    assessment_id: string | null;
-                    action: string;
-                    changed_by: string | null;
-                    changed_at: string;
-                    old_values: Json | null;
-                    new_values: Json | null;
-                    ip_address: string | null;
-                    user_agent: string | null;
-                };
-                Insert: {
-                    id?: string;
-                    assessment_id?: string | null;
-                    action: string;
-                    changed_by?: string | null;
-                    changed_at?: string;
-                    old_values?: Json | null;
-                    new_values?: Json | null;
-                    ip_address?: string | null;
-                    user_agent?: string | null;
-                };
-                Update: {
-                    id?: string;
-                    assessment_id?: string | null;
-                    action?: string;
-                    changed_by?: string | null;
-                    changed_at?: string;
-                    old_values?: Json | null;
-                    new_values?: Json | null;
-                    ip_address?: string | null;
-                    user_agent?: string | null;
-                };
-            };
             sessions: {
                 Row: {
                     id: string;
@@ -263,7 +228,7 @@ export interface Database {
                     id: string;
                     email: string;
                     name: string;
-                    role: 'admin' | 'reviewer' | 'manager';
+                    role: 'super_admin' | 'admin' | 'assessor' | 'read_only' | 'reviewer' | 'manager';
                     two_factor_enabled: boolean;
                     last_login: string | null;
                     created_at: string;
@@ -273,7 +238,7 @@ export interface Database {
                     id?: string;
                     email: string;
                     name: string;
-                    role: 'admin' | 'reviewer' | 'manager';
+                    role: 'super_admin' | 'admin' | 'assessor' | 'read_only' | 'reviewer' | 'manager';
                     two_factor_enabled?: boolean;
                     last_login?: string | null;
                     created_at?: string;
@@ -283,9 +248,276 @@ export interface Database {
                     id?: string;
                     email?: string;
                     name?: string;
-                    role?: 'admin' | 'reviewer' | 'manager';
+                    role?: 'super_admin' | 'admin' | 'assessor' | 'read_only' | 'reviewer' | 'manager';
                     two_factor_enabled?: boolean;
                     last_login?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            audit_logs: {
+                Row: {
+                    id: string;
+                    user_id: string | null;
+                    action: string;
+                    resource_type: string | null;
+                    resource_id: string | null;
+                    details: Json | null;
+                    ip_address: string | null;
+                    user_agent: string | null;
+                    success: boolean;
+                    error_message: string | null;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    user_id?: string | null;
+                    action: string;
+                    resource_type?: string | null;
+                    resource_id?: string | null;
+                    details?: Json | null;
+                    ip_address?: string | null;
+                    user_agent?: string | null;
+                    success?: boolean;
+                    error_message?: string | null;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    user_id?: string | null;
+                    action?: string;
+                    resource_type?: string | null;
+                    resource_id?: string | null;
+                    details?: Json | null;
+                    ip_address?: string | null;
+                    user_agent?: string | null;
+                    success?: boolean;
+                    error_message?: string | null;
+                    created_at?: string;
+                };
+            };
+            complaints: {
+                Row: {
+                    id: string;
+                    complaint_number: string;
+                    complainant_name: string;
+                    complainant_email: string;
+                    complainant_phone: string | null;
+                    category: 'service_quality' | 'delayed_response' | 'incorrect_assessment' | 'billing_issue' | 'communication' | 'data_privacy' | 'other';
+                    priority: 'critical' | 'high' | 'medium' | 'low';
+                    description: string;
+                    status: 'new' | 'under_investigation' | 'resolved' | 'closed';
+                    assessment_id: string | null;
+                    internal_notes: string | null;
+                    assigned_to: string | null;
+                    created_at: string;
+                    updated_at: string;
+                    resolved_at: string | null;
+                    closed_at: string | null;
+                    sla_deadline: string | null;
+                    sla_breached: boolean;
+                    metadata: Json | null;
+                };
+                Insert: {
+                    id?: string;
+                    complaint_number?: string;
+                    complainant_name: string;
+                    complainant_email: string;
+                    complainant_phone?: string | null;
+                    category: 'service_quality' | 'delayed_response' | 'incorrect_assessment' | 'billing_issue' | 'communication' | 'data_privacy' | 'other';
+                    priority?: 'critical' | 'high' | 'medium' | 'low';
+                    description: string;
+                    status?: 'new' | 'under_investigation' | 'resolved' | 'closed';
+                    assessment_id?: string | null;
+                    internal_notes?: string | null;
+                    assigned_to?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                    resolved_at?: string | null;
+                    closed_at?: string | null;
+                    sla_deadline?: string | null;
+                    sla_breached?: boolean;
+                    metadata?: Json | null;
+                };
+                Update: {
+                    id?: string;
+                    complaint_number?: string;
+                    complainant_name?: string;
+                    complainant_email?: string;
+                    complainant_phone?: string | null;
+                    category?: 'service_quality' | 'delayed_response' | 'incorrect_assessment' | 'billing_issue' | 'communication' | 'data_privacy' | 'other';
+                    priority?: 'critical' | 'high' | 'medium' | 'low';
+                    description?: string;
+                    status?: 'new' | 'under_investigation' | 'resolved' | 'closed';
+                    assessment_id?: string | null;
+                    internal_notes?: string | null;
+                    assigned_to?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                    resolved_at?: string | null;
+                    closed_at?: string | null;
+                    sla_deadline?: string | null;
+                    sla_breached?: boolean;
+                    metadata?: Json | null;
+                };
+            };
+            complaint_messages: {
+                Row: {
+                    id: string;
+                    complaint_id: string;
+                    sender_id: string | null;
+                    sender_type: 'admin' | 'complainant' | 'system';
+                    message: string;
+                    is_internal: boolean;
+                    created_at: string;
+                    metadata: Json | null;
+                };
+                Insert: {
+                    id?: string;
+                    complaint_id: string;
+                    sender_id?: string | null;
+                    sender_type: 'admin' | 'complainant' | 'system';
+                    message: string;
+                    is_internal?: boolean;
+                    created_at?: string;
+                    metadata?: Json | null;
+                };
+                Update: {
+                    id?: string;
+                    complaint_id?: string;
+                    sender_id?: string | null;
+                    sender_type?: 'admin' | 'complainant' | 'system';
+                    message?: string;
+                    is_internal?: boolean;
+                    created_at?: string;
+                    metadata?: Json | null;
+                };
+            };
+            complaint_attachments: {
+                Row: {
+                    id: string;
+                    complaint_id: string;
+                    file_name: string;
+                    file_size: number;
+                    file_type: string;
+                    storage_path: string;
+                    uploaded_by: string | null;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    complaint_id: string;
+                    file_name: string;
+                    file_size: number;
+                    file_type: string;
+                    storage_path: string;
+                    uploaded_by?: string | null;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    complaint_id?: string;
+                    file_name?: string;
+                    file_size?: number;
+                    file_type?: string;
+                    storage_path?: string;
+                    uploaded_by?: string | null;
+                    created_at?: string;
+                };
+            };
+            supplementary_requests: {
+                Row: {
+                    id: string;
+                    original_assessment_id: string;
+                    supplementary_number: number;
+                    amount: number;
+                    pdf_path: string | null;
+                    ai_recommendation: string | null;
+                    ai_confidence: number | null;
+                    status: 'pending' | 'approved' | 'rejected' | 'under_review';
+                    reviewed_by: string | null;
+                    reviewed_at: string | null;
+                    notes: string | null;
+                    metadata: Json | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    original_assessment_id: string;
+                    supplementary_number?: number;
+                    amount?: number;
+                    pdf_path?: string | null;
+                    ai_recommendation?: string | null;
+                    ai_confidence?: number | null;
+                    status?: 'pending' | 'approved' | 'rejected' | 'under_review';
+                    reviewed_by?: string | null;
+                    reviewed_at?: string | null;
+                    notes?: string | null;
+                    metadata?: Json | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    original_assessment_id?: string;
+                    supplementary_number?: number;
+                    amount?: number;
+                    pdf_path?: string | null;
+                    ai_recommendation?: string | null;
+                    ai_confidence?: number | null;
+                    status?: 'pending' | 'approved' | 'rejected' | 'under_review';
+                    reviewed_by?: string | null;
+                    reviewed_at?: string | null;
+                    notes?: string | null;
+                    metadata?: Json | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            review_queue: {
+                Row: {
+                    id: string;
+                    assessment_id: string | null;
+                    quote_request_id: string | null;
+                    spam_score: number;
+                    recaptcha_score: number | null;
+                    review_reason: string;
+                    status: 'pending' | 'approved' | 'rejected' | 'more_info_requested';
+                    assigned_to: string | null;
+                    reviewed_by: string | null;
+                    reviewed_at: string | null;
+                    admin_notes: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    assessment_id?: string | null;
+                    quote_request_id?: string | null;
+                    spam_score?: number;
+                    recaptcha_score?: number | null;
+                    review_reason: string;
+                    status?: 'pending' | 'approved' | 'rejected' | 'more_info_requested';
+                    assigned_to?: string | null;
+                    reviewed_by?: string | null;
+                    reviewed_at?: string | null;
+                    admin_notes?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    assessment_id?: string | null;
+                    quote_request_id?: string | null;
+                    spam_score?: number;
+                    recaptcha_score?: number | null;
+                    review_reason?: string;
+                    status?: 'pending' | 'approved' | 'rejected' | 'more_info_requested';
+                    assigned_to?: string | null;
+                    reviewed_by?: string | null;
+                    reviewed_at?: string | null;
+                    admin_notes?: string | null;
                     created_at?: string;
                     updated_at?: string;
                 };

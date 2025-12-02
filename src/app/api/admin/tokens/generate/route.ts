@@ -199,9 +199,9 @@ export async function POST(request: NextRequest) {
         // Log the action to audit logs
         try {
             const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-                changed_by: currentUser.id,
+                user_id: currentUser.id,
                 action: 'token_generated',
-                new_values: {
+                details: {
                     tokenId: claimToken.id,
                     customerId: sanitizedCustomerId,
                     customerEmail: sanitizedEmail.substring(0, 3) + '***', // Partial email for privacy
@@ -211,7 +211,8 @@ export async function POST(request: NextRequest) {
                 },
                 ip_address: ipAddress,
                 user_agent: userAgent,
-                changed_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                success: true,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;
@@ -249,13 +250,14 @@ export async function POST(request: NextRequest) {
                 const rawIpHeader = request.headers.get('x-forwarded-for');
                 const ipAddress = validateAndExtractIp(rawIpHeader);
                 const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
-                    changed_by: currentUser.id,
+                    user_id: currentUser.id,
                     action: 'token_generation_failed',
-                    new_values: {
+                    details: {
                         error: 'Token generation failed',
                     },
                     ip_address: ipAddress,
-                    changed_at: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
+                    success: false,
                 };
                 await (supabase.from('audit_logs') as unknown as {
                     insert: (values: Database['public']['Tables']['audit_logs']['Insert']) => Promise<unknown>;

@@ -1,0 +1,86 @@
+# Vercel ignore file
+# Files and folders that should not be deployed to Vercel
+
+# Documentation files
+*.md
+!README.md
+
+# Test files
+test-*.js
+test-*.sh
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+tests/
+
+# Development/audit files
+*_AUDIT*.md
+*_STATUS*.md
+*_CHECKLIST*.md
+*_GUIDE*.md
+*_SETUP*.md
+*_FIXES*.md
+*_COMPLETE*.md
+*_IMPLEMENTATION*.md
+QUICK_*.md
+POSTMAN_*.md
+SECURITY_*.md
+DATABASE_*.md
+EMAIL_*.md
+IMPLEMENTATION_*.md
+PHASE*.md
+REQUIREMENT_*.md
+
+# Backup files
+*.backup
+*.bak
+*.old
+backups/
+*.sql.backup
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Database dumps
+*.sql.dump
+*.dump
+
+# Scripts (keep only production scripts)
+scripts/dev-*.sh
+scripts/test-*.sh
+scripts/backup-*.sh
+
+# Database migrations (run separately on Supabase/Postgres, not needed in Vercel deployment)
+prisma/migrations/
+!prisma/schema.prisma
+supabase/migrations/
+
+# Local development
+.local/
+local/
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Coverage
+coverage/
+.nyc_output/
+

@@ -13,6 +13,20 @@ import JSZip from 'jszip';
 
 type AuditLogInsert = Database['public']['Tables']['audit_logs']['Insert'];
 type UploadedFileRow = Database['public']['Tables']['uploaded_files']['Row'];
+type EmailLogInsert = {
+    assessment_id: string;
+    recipient_type: string;
+    recipient_email: string;
+    recipient_name: string | null;
+    subject: string;
+    body_html: string;
+    sent_at?: string;
+    attachments?: Array<{ filename: string }>;
+    status?: string;
+    message_id?: string | null;
+    [key: string]: unknown;
+};
+type AssessmentRow = Database['public']['Tables']['assessments']['Row'] & { assessed_quote?: unknown };
 
 const BUCKET_NAME = 'Assessment-photos';
 
@@ -53,12 +67,12 @@ export async function POST(
         }
 
         // Verify assessment exists
-        const { data: assessment, error: assessmentError } = await supabase
+        const { data: assessment, error: assessmentError } = (await supabase
             .from('assessments')
             .select('*')
             .eq('id', assessmentId)
             .is('deleted_at', null)
-            .single();
+            .single()) as { data: AssessmentRow | null; error: unknown };
 
         if (assessmentError || !assessment) {
             return NextResponse.json(
@@ -169,7 +183,7 @@ export async function POST(
                     // Log email to email_logs table
                     try {
                         await (supabase.from('email_logs') as unknown as {
-                            insert: (values: any[]) => Promise<unknown>;
+                            insert: (values: EmailLogInsert[]) => Promise<unknown>;
                         }).insert([{
                             assessment_id: assessmentId,
                             recipient_type: 'repairer',
@@ -273,7 +287,7 @@ export async function POST(
                     // Log email to email_logs table
                     try {
                         await (supabase.from('email_logs') as unknown as {
-                            insert: (values: any[]) => Promise<unknown>;
+                            insert: (values: EmailLogInsert[]) => Promise<unknown>;
                         }).insert([{
                             assessment_id: assessmentId,
                             recipient_type: 'insurer',
@@ -299,8 +313,13 @@ export async function POST(
         }
 
         // Update assessment status to completed
-        await supabase
-            .from('assessments')
+        await (supabase
+            .from('assessments') as unknown as {
+                update: (values: Database['public']['Tables']['assessments']['Update']) => {
+                    eq: (column: string, value: string) => Promise<unknown>;
+                };
+            }
+        )
             .update({
                 status: 'completed',
                 updated_at: new Date().toISOString(),
@@ -311,16 +330,17 @@ export async function POST(
         try {
             const auditLogInsert: AuditLogInsert = {
                 action: 'emails_sent',
-                old_values: {
-                    status: assessment.status,
-                },
-                new_values: {
-                    status: 'completed',
+                resource_type: 'assessment',
+                resource_id: assessmentId,
+                details: {
+                    old_status: assessment.status,
+                    new_status: 'completed',
                     emails_sent: results,
                 },
                 ip_address: ipAddress || undefined,
                 user_agent: userAgent || undefined,
-                changed_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                success: true,
             };
             await (supabase.from('audit_logs') as unknown as {
                 insert: (values: AuditLogInsert[]) => Promise<unknown>;
@@ -359,13 +379,13 @@ export async function POST(
 
 // Generate repairer email body
 function generateRepairerEmailBody(
-    assessment: any,
+    assessment: AssessmentRow,
     vehicleDisplay: string,
     additionalNotes: string
 ): string {
-    const ownerInfo = assessment.owner_info as any;
+    const ownerInfo = assessment.owner_info as Record<string, unknown> | null;
     const ownerName = ownerInfo
-        ? `${ownerInfo.firstName || ''} ${ownerInfo.lastName || ''}`.trim()
+        ? `${(ownerInfo.firstName as string) || ''} ${(ownerInfo.lastName as string) || ''}`.trim()
         : '';
 
     return `
@@ -424,13 +444,13 @@ function generateRepairerEmailBody(
 
 // Generate insurance email body
 function generateInsuranceEmailBody(
-    assessment: any,
+    assessment: AssessmentRow,
     vehicleDisplay: string,
     additionalNotes: string
 ): string {
-    const ownerInfo = assessment.owner_info as any;
+    const ownerInfo = assessment.owner_info as Record<string, unknown> | null;
     const ownerName = ownerInfo
-        ? `${ownerInfo.firstName || ''} ${ownerInfo.lastName || ''}`.trim()
+        ? `${(ownerInfo.firstName as string) || ''} ${(ownerInfo.lastName as string) || ''}`.trim()
         : '';
 
     return `
