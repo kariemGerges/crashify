@@ -322,9 +322,23 @@ export async function POST(
         )
             .update({
                 status: 'completed',
+                completed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             })
             .eq('id', assessmentId);
+
+        // REQ-120: Notify client of status change
+        try {
+            const { notifyClient } = await import('@/server/lib/services/notification-service');
+            await notifyClient(assessment.your_email, 'status_change', {
+                title: 'Assessment Completed',
+                message: `Your assessment has been completed. Reports and documents have been sent to the relevant parties.`,
+                assessmentId: assessmentId,
+                status: 'completed',
+            });
+        } catch (notifyError) {
+            console.error('[SEND_EMAILS] Notification error (non-critical):', notifyError);
+        }
 
         // Log audit event
         try {

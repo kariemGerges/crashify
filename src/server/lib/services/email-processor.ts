@@ -240,6 +240,95 @@ export class EmailProcessor {
     }
 
     /**
+     * Process email directly (for re-processing approved quarantined emails)
+     * Bypasses IMAP and quarantine checks
+     */
+    async processEmailDirectly(email: ParsedMail | {
+        from: { text: string; value: Array<{ address: string }> };
+        subject: string;
+        text: string;
+        html: string | null;
+        attachments: unknown[];
+        date: Date;
+        messageId: string;
+        headers: Record<string, unknown>;
+    }): Promise<boolean> {
+        try {
+            // Extract data from email
+            const extractedData = this.extractDataFromEmail(email);
+            
+            // Create assessment from email data
+            return await this.createAssessmentFromEmailData(extractedData, email);
+        } catch (error) {
+            console.error('[EmailProcessor] Error processing email directly:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Create assessment from extracted email data
+     */
+    private async createAssessmentFromEmailData(
+        extractedData: ExtractedData,
+        email: ParsedMail | {
+            from: { text: string; value: Array<{ address: string }> };
+            subject: string;
+            text: string;
+            html: string | null;
+            attachments: unknown[];
+            date: Date;
+            messageId: string;
+            headers: Record<string, unknown>;
+        }
+    ): Promise<boolean> {
+        try {
+            const assessmentData: AssessmentInsert = {
+                your_name: extractedData.insuredName || email.from?.text || 'Unknown',
+                your_email: email.from?.value?.[0]?.address || 'unknown@example.com',
+                your_phone: '',
+                company_name: extractedData.repairerInfo?.name || 'Unknown Company',
+                year: extractedData.vehicleInfo?.year ? parseInt(extractedData.vehicleInfo.year) : null,
+                make: extractedData.vehicleInfo?.make || '',
+                model: extractedData.vehicleInfo?.model || '',
+                registration: extractedData.vehicleInfo?.registration || null,
+                incident_description: extractedData.incidentDescription || email.text?.substring(0, 1000) || '',
+                assessment_type: 'Desktop Assessment',
+                status: 'pending',
+                internal_notes: `Imported from email. Source: ${email.from?.text || 'unknown'}. Subject: ${email.subject || 'no subject'}. Claim: ${extractedData.claimReference || 'N/A'}`,
+                authority_confirmed: false,
+                privacy_consent: false,
+            };
+
+            const { data: assessment, error } = await (
+                this.supabase.from('assessments') as unknown as {
+                    insert: (values: AssessmentInsert) => {
+                        select: (columns: string) => {
+                            single: () => Promise<{
+                                data: { id: string } | null;
+                                error: { message: string } | null;
+                            }>;
+                        };
+                    };
+                }
+            )
+                .insert(assessmentData)
+                .select('id')
+                .single();
+
+            if (error || !assessment) {
+                console.error('[EmailProcessor] Failed to create assessment:', error);
+                return false;
+            }
+
+            console.log(`[EmailProcessor] Created assessment ${assessment.id} from email`);
+            return true;
+        } catch (error) {
+            console.error('[EmailProcessor] Error creating assessment:', error);
+            return false;
+        }
+    }
+
+    /**
      * Process a single email
      * Enhanced with whitelist/blacklist, spam detection, quarantine, and auto-reply (REQ-4, REQ-5, REQ-6)
      */
@@ -417,7 +506,16 @@ export class EmailProcessor {
     /**
      * Extract data from email body using pattern matching
      */
-    private extractDataFromEmail(email: ParsedMail): ExtractedData {
+    private extractDataFromEmail(email: ParsedMail | {
+        from: { text: string; value: Array<{ address: string }> };
+        subject: string;
+        text: string;
+        html: string | null;
+        attachments: unknown[];
+        date: Date;
+        messageId: string;
+        headers: Record<string, unknown>;
+    }): ExtractedData {
         const data: ExtractedData = {};
         const text = email.text || email.html || '';
 

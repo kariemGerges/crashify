@@ -4,15 +4,15 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/server/lib/supabase/client';
+import { supabase, createServerClient } from '@/server/lib/supabase/client';
 import { requireCsrfToken } from '@/server/lib/security/csrf';
 import { logAuditEventFromRequest } from '@/server/lib/audit/logger';
 import { getSession } from '@/server/lib/auth/session';
-import type { Database } from '@/server/lib/types/database.types';
+import type { Database, Json } from '@/server/lib/types/database.types';
 
 type ComplaintUpdate = Database['public']['Tables']['complaints']['Update'];
 
-// GET: Get complaint details
+// GET: Get complaint details (public endpoint for tracking, admin for full details)
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -20,8 +20,25 @@ export async function GET(
     try {
         const { id } = await params;
 
-        const { data: complaint, error } = await supabase
-            .from('complaints')
+        // Use service role client to bypass RLS
+        const serverClient = createServerClient();
+
+        // Check if user is authenticated (admin access)
+        const user = await getSession();
+        const isAdmin = !!user;
+
+        const { data: complaint, error } = await (
+            serverClient.from('complaints') as unknown as {
+                select: (columns: string) => {
+                    eq: (column: string, value: string) => {
+                        single: () => Promise<{
+                            data: Database['public']['Tables']['complaints']['Row'] | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
+                };
+            }
+        )
             .select('*')
             .eq('id', id)
             .single();
@@ -33,24 +50,132 @@ export async function GET(
             );
         }
 
-        // Get attachments
-        const { data: attachments } = await supabase
-            .from('complaint_attachments')
+        // Get attachments with signed URLs
+        const { data: attachments, error: attachmentsError } = await (
+            serverClient.from('complaint_attachments') as unknown as {
+                select: (columns: string) => {
+                    eq: (column: string, value: string) => Promise<{
+                        data: Array<{
+                            id: string;
+                            complaint_id: string;
+                            file_name: string;
+                            file_size: number;
+                            file_type: string;
+                            storage_path: string;
+                            uploaded_by: string | null;
+                            created_at: string;
+                        }> | null;
+                        error: { message: string } | null;
+                    }>;
+                };
+            }
+        )
             .select('*')
             .eq('complaint_id', id);
 
-        // Get messages
-        const { data: messages } = await supabase
-            .from('complaint_messages')
+        if (attachmentsError) {
+            console.error('[COMPLAINT] Error fetching attachments:', attachmentsError);
+        } else {
+            console.log('[COMPLAINT] Fetched attachments from DB:', attachments?.length || 0, 'for complaint:', id);
+            if (attachments && attachments.length > 0) {
+                console.log('[COMPLAINT] Attachment storage paths:', attachments.map(a => a.storage_path));
+            } else {
+                console.log('[COMPLAINT] No attachments found in database for complaint:', id);
+            }
+        }
+
+        // Generate signed URLs for attachments
+        const attachmentsWithUrls = await Promise.all(
+            (attachments || []).map(async (attachment) => {
+                try {
+                    const { data: urlData, error: urlError } = await serverClient.storage
+                        .from('complaint-attachments')
+                        .createSignedUrl(attachment.storage_path, 3600); // 1 hour expiry
+
+                    if (urlError) {
+                        console.error('[COMPLAINT] Error creating signed URL for:', attachment.storage_path, urlError);
+                        return {
+                            ...attachment,
+                            signed_url: null,
+                            error: urlError.message,
+                        };
+                    }
+
+                    return {
+                        ...attachment,
+                        signed_url: urlData?.signedUrl || null,
+                    };
+                } catch (error) {
+                    console.error('[COMPLAINT] Exception creating signed URL:', error);
+                    return {
+                        ...attachment,
+                        signed_url: null,
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                    };
+                }
+            })
+        );
+
+        console.log('[COMPLAINT] Raw attachments from DB:', attachments?.length || 0);
+        console.log('[COMPLAINT] Attachments with URLs:', attachmentsWithUrls.length, 'for complaint:', id);
+        console.log('[COMPLAINT] Attachment details:', attachmentsWithUrls.map(a => ({
+            id: a.id,
+            file_name: a.file_name,
+            storage_path: a.storage_path,
+            has_signed_url: !!a.signed_url
+        })));
+
+        // Get messages (filter out internal messages for public access)
+        const { data: messages } = await (
+            serverClient.from('complaint_messages') as unknown as {
+                select: (columns: string) => {
+                    eq: (column: string, value: string) => {
+                        order: (column: string, options: { ascending: boolean }) => Promise<{
+                            data: Array<{
+                                id: string;
+                                complaint_id: string;
+                                sender_id: string | null;
+                                sender_type: 'admin' | 'complainant' | 'system';
+                                message: string;
+                                is_internal: boolean;
+                                created_at: string;
+                                metadata: Json | null;
+                            }> | null;
+                        }>;
+                    };
+                };
+            }
+        )
             .select('*')
             .eq('complaint_id', id)
             .order('created_at', { ascending: true });
 
-        return NextResponse.json({
-            complaint,
-            attachments: attachments || [],
-            messages: messages || [],
+        // Filter messages based on access level
+        const filteredMessages = isAdmin
+            ? messages || []
+            : (messages || []).filter((msg) => !msg.is_internal);
+
+        // Prepare complaint data (hide internal_notes for public access)
+        const complaintData = isAdmin
+            ? complaint
+            : {
+                  ...complaint,
+                  internal_notes: undefined, // Don't expose internal notes publicly
+              };
+
+        const responseData = {
+            complaint: complaintData,
+            attachments: attachmentsWithUrls,
+            messages: filteredMessages,
+        };
+
+        console.log('[COMPLAINT] Response data structure:', {
+            hasComplaint: !!responseData.complaint,
+            attachmentsCount: responseData.attachments.length,
+            messagesCount: responseData.messages.length
         });
+
+        return NextResponse.json(responseData);
     } catch (error) {
         console.error('[COMPLAINT] Get error:', error);
         return NextResponse.json(
@@ -90,6 +215,9 @@ export async function PATCH(
         const { id } = await params;
         const body = await request.json();
 
+        // Use service role client to bypass RLS
+        const serverClient = createServerClient();
+
         // Build update object
         const updateData: ComplaintUpdate = {};
 
@@ -109,7 +237,7 @@ export async function PATCH(
             updateData.priority = body.priority as ComplaintUpdate['priority'];
             // Recalculate SLA deadline if priority changes
             if (body.priority) {
-                const { data: slaData } = await (supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown }>)('calculate_sla_deadline', {
+                const { data: slaData } = await (serverClient.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown }>)('calculate_sla_deadline', {
                     priority_level: body.priority,
                 });
                 if (slaData) {
@@ -119,7 +247,7 @@ export async function PATCH(
         }
 
         const { data: complaint, error } = await (
-            supabase.from('complaints') as unknown as {
+            serverClient.from('complaints') as unknown as {
                 update: (values: ComplaintUpdate) => {
                     eq: (column: string, value: string) => {
                         select: () => {

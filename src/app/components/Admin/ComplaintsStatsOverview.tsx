@@ -1,6 +1,6 @@
 // =============================================
-// FILE: app/components/Admin/EnhancedStatsOverview.tsx
-// Enhanced Dashboard Analytics (REQ-37 to REQ-55)
+// FILE: app/components/Admin/ComplaintsStatsOverview.tsx
+// Enhanced Complaints Analytics Dashboard
 // =============================================
 
 'use client';
@@ -32,30 +32,36 @@ import {
     Bell,
     Loader2,
     RefreshCw,
+    ThumbsUp,
+    ThumbsDown,
+    Award,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ComplaintsStatsOverview } from '@/app/components/Admin/ComplaintsStatsOverview'; 
 
-interface DashboardData {
+interface ComplaintsDashboardData {
     totalThisMonth: number;
-    pending: number;
-    inProgress: number;
-    completed: number;
-    completionRate: number;
-    averageDaysToComplete: number;
-    revenueThisMonth: number;
+    total: number;
+    positive: number;
+    negative: number;
+    satisfactionScore: number;
+    resolutionRate: number;
+    averageResolutionTime: number;
     overdue: number;
     statusBreakdown: {
-        pending: number;
-        processing: number;
-        completed: number;
-        cancelled: number;
+        new: number;
+        under_investigation: number;
+        resolved: number;
+        closed: number;
     };
     monthlyTrend: Array<{ month: string; count: number }>;
-    topInsurers: Array<{ name: string; count: number }>;
-    topRepairers: Array<{ name: string; count: number }>;
-    completionTimeByMonth: Array<{ month: string; days: number }>;
-    revenueByMonth: Array<{ month: string; revenue: number }>;
+    resolutionTrend: Array<{ month: string; resolved: number; total: number }>;
+    topCategories: Array<{ name: string; count: number }>;
+    priorityBreakdown: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+    };
     activityFeed: Array<{
         id: string;
         type: string;
@@ -67,9 +73,13 @@ interface DashboardData {
 }
 
 const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'];
+const SENTIMENT_COLORS = {
+    positive: '#10b981',
+    negative: '#ef4444',
+};
 
-export const EnhancedStatsOverview: React.FC = () => {
-    const [data, setData] = useState<DashboardData | null>(null);
+export const ComplaintsStatsOverview: React.FC = () => {
+    const [data, setData] = useState<ComplaintsDashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -87,7 +97,7 @@ export const EnhancedStatsOverview: React.FC = () => {
 
     const fetchAnalytics = async (forceRefresh: boolean = false) => {
         try {
-            const response = await fetch('/api/analytics/dashboard', {
+            const response = await fetch('/api/analytics/complaints', {
                 credentials: 'include',
                 cache: forceRefresh ? 'no-store' : 'default', // Use cache unless force refresh
                 ...(forceRefresh && {
@@ -101,7 +111,7 @@ export const EnhancedStatsOverview: React.FC = () => {
             setData(result);
             setLastRefreshed(result.lastRefreshed ? new Date(result.lastRefreshed) : new Date());
         } catch (error) {
-            console.error('Failed to fetch analytics:', error);
+            console.error('Failed to fetch complaints analytics:', error);
         } finally {
             setLoading(false);
         }
@@ -110,7 +120,7 @@ export const EnhancedStatsOverview: React.FC = () => {
     const exportToCSV = async () => {
         setExporting(true);
         try {
-            const response = await fetch('/api/analytics/export?format=csv', {
+            const response = await fetch('/api/analytics/complaints/export?format=csv', {
                 credentials: 'include',
             });
             if (!response.ok) throw new Error('Export failed');
@@ -118,7 +128,7 @@ export const EnhancedStatsOverview: React.FC = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `analytics-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+            a.download = `complaints-analytics-${format(new Date(), 'yyyy-MM-dd')}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -133,7 +143,7 @@ export const EnhancedStatsOverview: React.FC = () => {
     const exportToExcel = async () => {
         setExporting(true);
         try {
-            const response = await fetch('/api/analytics/export?format=xlsx', {
+            const response = await fetch('/api/analytics/complaints/export?format=xlsx', {
                 credentials: 'include',
             });
             if (!response.ok) throw new Error('Export failed');
@@ -141,7 +151,7 @@ export const EnhancedStatsOverview: React.FC = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `analytics-${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+            a.download = `complaints-analytics-${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -156,7 +166,7 @@ export const EnhancedStatsOverview: React.FC = () => {
     const generatePDFReport = async () => {
         setExporting(true);
         try {
-            const response = await fetch('/api/analytics/report/pdf', {
+            const response = await fetch('/api/analytics/complaints/report/pdf', {
                 credentials: 'include',
             });
             if (!response.ok) throw new Error('Report generation failed');
@@ -164,7 +174,7 @@ export const EnhancedStatsOverview: React.FC = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `monthly-report-${format(new Date(), 'yyyy-MM')}.pdf`;
+            a.download = `complaints-report-${format(new Date(), 'yyyy-MM')}.pdf`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -185,15 +195,40 @@ export const EnhancedStatsOverview: React.FC = () => {
     }
 
     if (!data) {
-        return <div className="text-center py-12 text-gray-400">Failed to load analytics</div>;
+        return <div className="text-center py-12 text-gray-400">Failed to load complaints analytics</div>;
     }
 
     const statusChartData = [
-        { name: 'Pending', value: data.statusBreakdown.pending },
-        { name: 'Processing', value: data.statusBreakdown.processing },
-        { name: 'Completed', value: data.statusBreakdown.completed },
-        { name: 'Cancelled', value: data.statusBreakdown.cancelled },
+        { name: 'New', value: data.statusBreakdown.new },
+        { name: 'Under Investigation', value: data.statusBreakdown.under_investigation },
+        { name: 'Resolved', value: data.statusBreakdown.resolved },
+        { name: 'Closed', value: data.statusBreakdown.closed },
     ];
+
+    const sentimentChartData = [
+        { name: 'Positive (Resolved/Closed)', value: data.positive, color: SENTIMENT_COLORS.positive },
+        { name: 'Negative (Active)', value: data.negative, color: SENTIMENT_COLORS.negative },
+    ];
+
+    const priorityChartData = [
+        { name: 'Critical', value: data.priorityBreakdown.critical },
+        { name: 'High', value: data.priorityBreakdown.high },
+        { name: 'Medium', value: data.priorityBreakdown.medium },
+        { name: 'Low', value: data.priorityBreakdown.low },
+    ];
+
+    // Get score color based on value
+    const getScoreColor = (score: number) => {
+        if (score >= 80) return 'text-green-500';
+        if (score >= 60) return 'text-yellow-500';
+        return 'text-red-500';
+    };
+
+    const getScoreBgColor = (score: number) => {
+        if (score >= 80) return 'bg-green-500/10 border-green-500/50';
+        if (score >= 60) return 'bg-yellow-500/10 border-yellow-500/50';
+        return 'bg-red-500/10 border-red-500/50';
+    };
 
     return (
         <div className="space-y-6">
@@ -220,15 +255,15 @@ export const EnhancedStatsOverview: React.FC = () => {
                 </button>
             </div>
 
-            {/* REQ-52: Alert banner for overdue items */}
+            {/* Alert banner for overdue items */}
             {data.overdue > 0 && (
                 <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <AlertCircle className="w-5 h-5 text-red-500" />
                         <div>
-                            <p className="text-white font-semibold">Overdue Items Alert</p>
+                            <p className="text-white font-semibold">Overdue Complaints Alert</p>
                             <p className="text-gray-400 text-sm">
-                                {data.overdue} assessment{data.overdue !== 1 ? 's' : ''} are overdue
+                                {data.overdue} complaint{data.overdue !== 1 ? 's' : ''} {data.overdue !== 1 ? 'are' : 'is'} overdue
                             </p>
                         </div>
                     </div>
@@ -237,22 +272,55 @@ export const EnhancedStatsOverview: React.FC = () => {
 
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Satisfaction Score */}
+                <div className={`bg-gray-900/50 border rounded-xl p-4 ${getScoreBgColor(data.satisfactionScore)}`}>
+                    <div className="flex items-center justify-between mb-2">
+                        <Award className={`w-5 h-5 ${getScoreColor(data.satisfactionScore)}`} />
+                        <span className="text-xs text-gray-400">Score</span>
+                    </div>
+                    <p className={`text-2xl font-bold ${getScoreColor(data.satisfactionScore)}`}>
+                        {data.satisfactionScore}/100
+                    </p>
+                    <p className="text-sm text-gray-400">Satisfaction Score</p>
+                </div>
+
                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                         <FileText className="w-5 h-5 text-amber-500" />
                         <span className="text-xs text-gray-400">This Month</span>
                     </div>
                     <p className="text-2xl font-bold text-white">{data.totalThisMonth}</p>
-                    <p className="text-sm text-gray-400">Total Assessments</p>
+                    <p className="text-sm text-gray-400">Total Complaints</p>
                 </div>
 
+                <div className="bg-gray-900/50 border border-green-500/20 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <ThumbsUp className="w-5 h-5 text-green-500" />
+                        <span className="text-xs text-gray-400">Resolved</span>
+                    </div>
+                    <p className="text-2xl font-bold text-white">{data.positive}</p>
+                    <p className="text-sm text-gray-400">Positive (Resolved/Closed)</p>
+                </div>
+
+                <div className="bg-gray-900/50 border border-red-500/20 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <ThumbsDown className="w-5 h-5 text-red-500" />
+                        <span className="text-xs text-gray-400">Active</span>
+                    </div>
+                    <p className="text-2xl font-bold text-white">{data.negative}</p>
+                    <p className="text-sm text-gray-400">Negative (Active Issues)</p>
+                </div>
+            </div>
+
+            {/* Secondary Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                         <CheckCircle className="w-5 h-5 text-green-500" />
                         <span className="text-xs text-gray-400">Rate</span>
                     </div>
-                    <p className="text-2xl font-bold text-white">{data.completionRate}%</p>
-                    <p className="text-sm text-gray-400">Completion Rate</p>
+                    <p className="text-2xl font-bold text-white">{data.resolutionRate.toFixed(1)}%</p>
+                    <p className="text-sm text-gray-400">Resolution Rate</p>
                 </div>
 
                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-4">
@@ -261,26 +329,50 @@ export const EnhancedStatsOverview: React.FC = () => {
                         <span className="text-xs text-gray-400">Average</span>
                     </div>
                     <p className="text-2xl font-bold text-white">
-                        {data.averageDaysToComplete.toFixed(1)}
+                        {data.averageResolutionTime.toFixed(1)}
                     </p>
-                    <p className="text-sm text-gray-400">Days to Complete</p>
+                    <p className="text-sm text-gray-400">Days to Resolve</p>
                 </div>
 
                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                         <TrendingUp className="w-5 h-5 text-green-500" />
-                        <span className="text-xs text-gray-400">This Month</span>
+                        <span className="text-xs text-gray-400">Total</span>
                     </div>
-                    <p className="text-2xl font-bold text-white">${data.revenueThisMonth.toLocaleString()}</p>
-                    <p className="text-sm text-gray-400">Revenue</p>
+                    <p className="text-2xl font-bold text-white">{data.total}</p>
+                    <p className="text-sm text-gray-400">All Time Complaints</p>
                 </div>
             </div>
 
             {/* Charts Row 1 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* REQ-45: Pie chart - assessments by status */}
+                {/* Pie chart - Positive vs Negative */}
                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Assessments by Status</h3>
+                    <h3 className="text-lg font-semibold text-white mb-4">Positive vs Negative Complaints</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                            <Pie
+                                data={sentimentChartData}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
+                                outerRadius={80}
+                                fill="#8884d8"
+                                dataKey="value"
+                            >
+                                {sentimentChartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                            <Tooltip />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Pie chart - Complaints by status */}
+                <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-white mb-4">Complaints by Status</h3>
                     <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                             <Pie
@@ -301,14 +393,17 @@ export const EnhancedStatsOverview: React.FC = () => {
                         </PieChart>
                     </ResponsiveContainer>
                 </div>
+            </div>
 
-                {/* REQ-46: Line graph - monthly volume trend */}
+            {/* Charts Row 2 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Line graph - monthly volume trend */}
                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Monthly Volume Trend</h3>
+                    <h3 className="text-lg font-semibold text-white mb-4">Monthly Complaint Trend</h3>
                     <ResponsiveContainer width="100%" height={300}>
                         <LineChart data={data.monthlyTrend}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis dataKey="month" stroke="#9ca3af" />
+                            <XAxis dataKey="month" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
                             <YAxis stroke="#9ca3af" />
                             <Tooltip
                                 contentStyle={{
@@ -323,22 +418,63 @@ export const EnhancedStatsOverview: React.FC = () => {
                                 dataKey="count"
                                 stroke="#f59e0b"
                                 strokeWidth={2}
-                                name="Assessments"
+                                name="Complaints"
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Line graph - resolution trend */}
+                <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-white mb-4">Monthly Resolution Trend</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={data.resolutionTrend}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                            <XAxis dataKey="month" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
+                            <YAxis stroke="#9ca3af" />
+                            <Tooltip
+                                contentStyle={{
+                                    backgroundColor: '#1f2937',
+                                    border: '1px solid #374151',
+                                    borderRadius: '8px',
+                                }}
+                            />
+                            <Legend />
+                            <Line
+                                type="monotone"
+                                dataKey="resolved"
+                                stroke="#10b981"
+                                strokeWidth={2}
+                                name="Resolved"
+                            />
+                            <Line
+                                type="monotone"
+                                dataKey="total"
+                                stroke="#ef4444"
+                                strokeWidth={2}
+                                name="Total"
                             />
                         </LineChart>
                     </ResponsiveContainer>
                 </div>
             </div>
 
-            {/* Charts Row 2 */}
+            {/* Charts Row 3 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* REQ-47: Bar chart - top insurers */}
+                {/* Bar chart - top categories */}
                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Top Insurers</h3>
+                    <h3 className="text-lg font-semibold text-white mb-4">Top Complaint Categories</h3>
                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={data.topInsurers}>
+                        <BarChart data={data.topCategories}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis dataKey="name" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
+                            <XAxis 
+                                dataKey="name" 
+                                stroke="#9ca3af" 
+                                angle={-45} 
+                                textAnchor="end" 
+                                height={100}
+                                tickFormatter={(value) => value.replace(/_/g, ' ')}
+                            />
                             <YAxis stroke="#9ca3af" />
                             <Tooltip
                                 contentStyle={{
@@ -352,13 +488,13 @@ export const EnhancedStatsOverview: React.FC = () => {
                     </ResponsiveContainer>
                 </div>
 
-                {/* REQ-49: Bar chart - average completion time */}
+                {/* Bar chart - complaints by priority */}
                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Average Completion Time</h3>
+                    <h3 className="text-lg font-semibold text-white mb-4">Complaints by Priority</h3>
                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={data.completionTimeByMonth}>
+                        <BarChart data={priorityChartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis dataKey="month" stroke="#9ca3af" angle={-45} textAnchor="end" height={100} />
+                            <XAxis dataKey="name" stroke="#9ca3af" />
                             <YAxis stroke="#9ca3af" />
                             <Tooltip
                                 contentStyle={{
@@ -367,19 +503,18 @@ export const EnhancedStatsOverview: React.FC = () => {
                                     borderRadius: '8px',
                                 }}
                             />
-                            <Bar dataKey="days" fill="#3b82f6" name="Days" />
+                            <Bar dataKey="value" fill="#3b82f6" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
             </div>
-            <ComplaintsStatsOverview />
 
-            {/* REQ-51: Live activity feed */}
+            {/* Live activity feed */}
             <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                         <Bell className="w-5 h-5 text-amber-500" />
-                        Live Activity Feed
+                        Recent Complaints Activity
                     </h3>
                 </div>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -396,21 +531,21 @@ export const EnhancedStatsOverview: React.FC = () => {
                             </div>
                             <span
                                 className={`px-2 py-1 rounded text-xs ${
-                                    activity.status === 'completed'
+                                    activity.status === 'resolved' || activity.status === 'closed'
                                         ? 'bg-green-500/20 text-green-400'
-                                        : activity.status === 'processing'
+                                        : activity.status === 'under_investigation'
                                         ? 'bg-blue-500/20 text-blue-400'
                                         : 'bg-yellow-500/20 text-yellow-400'
                                 }`}
                             >
-                                {activity.status}
+                                {activity.status.replace(/_/g, ' ')}
                             </span>
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* REQ-53, 54, 55: Export buttons */}
+            {/* Export buttons */}
             <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Export & Reports</h3>
                 <div className="flex flex-wrap gap-3">
@@ -440,14 +575,13 @@ export const EnhancedStatsOverview: React.FC = () => {
                     </button>
                     <button
                         onClick={async () => {
-                            // REQ-55: Email monthly report
                             try {
-                                const response = await fetch('/api/analytics/report/email', {
+                                const response = await fetch('/api/analytics/complaints/report/email', {
                                     method: 'POST',
                                     credentials: 'include',
                                 });
                                 if (response.ok) {
-                                    alert('Monthly report email sent successfully!');
+                                    alert('Complaints report email sent successfully!');
                                 }
                             } catch (error) {
                                 console.error('Failed to send email:', error);

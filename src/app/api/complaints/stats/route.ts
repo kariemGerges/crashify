@@ -4,7 +4,7 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/server/lib/supabase/client';
+import { createServerClient } from '@/server/lib/supabase/client';
 import { getSession } from '@/server/lib/auth/session';
 
 // GET: Get complaint statistics
@@ -19,19 +19,22 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        // Use service role client to bypass RLS
+        const serverClient = createServerClient();
+
         // Get total complaints
-        const { count: totalCount } = await supabase
+        const { count: totalCount } = await serverClient
             .from('complaints')
             .select('*', { count: 'exact', head: true });
 
         // Get active complaints (not closed) (REQ-66)
-        const { count: activeCount } = await supabase
+        const { count: activeCount } = await serverClient
             .from('complaints')
             .select('*', { count: 'exact', head: true })
             .not('status', 'eq', 'closed');
 
         // Get overdue complaints (REQ-67)
-        const { count: overdueCount } = await supabase
+        const { count: overdueCount } = await serverClient
             .from('complaints')
             .select('*', { count: 'exact', head: true })
             .lt('sla_deadline', new Date().toISOString())
@@ -39,7 +42,7 @@ export async function GET(request: NextRequest) {
             .not('status', 'eq', 'resolved');
 
         // Get resolved complaints for average calculation
-        const { data: resolvedComplaints } = (await supabase
+        const { data: resolvedComplaints } = (await serverClient
             .from('complaints')
             .select('created_at, resolved_at')
             .not('resolved_at', 'is', null)) as { data: Array<{ created_at: string; resolved_at: string | null }> | null };
@@ -60,7 +63,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get total assessments for complaint rate calculation
-        const { count: assessmentCount } = await supabase
+        const { count: assessmentCount } = await serverClient
             .from('assessments')
             .select('*', { count: 'exact', head: true })
             .is('deleted_at', null);
@@ -72,7 +75,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get complaints by status
-        const { data: statusData } = (await supabase
+        const { data: statusData } = (await serverClient
             .from('complaints')
             .select('status')) as { data: Array<{ status: string }> | null };
 
@@ -93,7 +96,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get complaints by priority
-        const { data: priorityData } = (await supabase
+        const { data: priorityData } = (await serverClient
             .from('complaints')
             .select('priority')
             .not('status', 'eq', 'closed')) as { data: Array<{ priority: string }> | null };

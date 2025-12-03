@@ -10,7 +10,6 @@ import { requireCsrfToken } from '@/server/lib/security/csrf';
 import type { Database } from '@/server/lib/types/database.types';
 
 type EmailFilterInsert = Database['public']['Tables']['email_filters']['Insert'];
-type EmailFilterUpdate = Database['public']['Tables']['email_filters']['Update'];
 
 // GET: List all email filters
 export async function GET(request: NextRequest) {
@@ -118,8 +117,18 @@ export async function POST(request: NextRequest) {
             is_active: is_active !== undefined ? is_active : true,
         };
 
-        const { data, error } = await supabase
-            .from('email_filters')
+        const { data, error } = await (
+            supabase.from('email_filters') as unknown as {
+                insert: (values: EmailFilterInsert) => {
+                    select: () => {
+                        single: () => Promise<{
+                            data: Database['public']['Tables']['email_filters']['Row'] | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
+                };
+            }
+        )
             .insert(filterData)
             .select()
             .single();

@@ -38,6 +38,15 @@ interface Complaint {
     assessment_id: string | null;
 }
 
+interface ComplaintAttachment {
+    id: string;
+    file_name: string;
+    file_size: number;
+    file_type: string;
+    signed_url: string | null;
+    created_at: string;
+}
+
 interface ComplaintStats {
     total: number;
     active: number;
@@ -53,6 +62,7 @@ export const ComplaintsTab: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [selectedComplaint, setSelectedComplaint] =
         useState<Complaint | null>(null);
+    const [selectedAttachments, setSelectedAttachments] = useState<ComplaintAttachment[]>([]);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showMessageModal, setShowMessageModal] = useState(false);
     const [message, setMessage] = useState('');
@@ -117,8 +127,11 @@ export const ComplaintsTab: React.FC = () => {
                 throw new Error('Failed to fetch complaint details');
 
             const data = await response.json();
+            console.log('[ADMIN] Complaint detail data:', data);
+            console.log('[ADMIN] Attachments:', data.attachments);
             setSelectedComplaint(data.complaint);
             setInternalNotes(data.complaint.internal_notes || '');
+            setSelectedAttachments(data.attachments || []);
             setShowDetailModal(true);
         } catch (error) {
             toast.showError('Failed to load complaint details');
@@ -569,6 +582,68 @@ export const ComplaintsTab: React.FC = () => {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Attachments */}
+                            {selectedAttachments && selectedAttachments.length > 0 ? (
+                                <div>
+                                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-amber-500" />
+                                        Attachments ({selectedAttachments.length})
+                                    </h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                        {selectedAttachments.map((attachment) => (
+                                            <div
+                                                key={attachment.id}
+                                                className="bg-black/50 border border-gray-700 rounded-lg p-4 hover:border-amber-500/50 transition-colors"
+                                            >
+                                                {attachment.file_type.startsWith('image/') && attachment.signed_url ? (
+                                                    <div className="mb-3">
+                                                        <img
+                                                            src={attachment.signed_url}
+                                                            alt={attachment.file_name}
+                                                            className="w-full h-32 object-cover rounded-lg"
+                                                            onError={(e) => {
+                                                                console.error('[ADMIN] Image load error:', attachment.signed_url);
+                                                                e.currentTarget.style.display = 'none';
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="mb-3 flex items-center justify-center h-32 bg-gray-800 rounded-lg">
+                                                        <FileText className="w-8 h-8 text-gray-500" />
+                                                    </div>
+                                                )}
+                                                <p className="text-white text-sm font-medium truncate mb-1" title={attachment.file_name}>
+                                                    {attachment.file_name}
+                                                </p>
+                                                <p className="text-gray-500 text-xs mb-2">
+                                                    {(attachment.file_size / 1024).toFixed(1)} KB
+                                                </p>
+                                                {attachment.signed_url ? (
+                                                    <a
+                                                        href={attachment.signed_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-amber-500 hover:text-amber-400 text-xs"
+                                                    >
+                                                        View/Download
+                                                    </a>
+                                                ) : (
+                                                    <p className="text-red-400 text-xs">URL not available</p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-amber-500" />
+                                        Attachments
+                                    </h3>
+                                    <p className="text-gray-400 text-sm">No attachments for this complaint.</p>
+                                </div>
+                            )}
 
                             {/* Internal Notes */}
                             <div>

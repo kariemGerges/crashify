@@ -68,35 +68,23 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // REQ-114: Email admin when new item in queue
+        // REQ-114: Notify admins when new item in queue
         try {
-            // Get admin users (use service role client)
-            const { data: admins } = (await serverClient
-                .from('users')
-                .select('email')
-                .in('role', ['super_admin', 'admin'])) as { data: Array<{ email: string }> | null };
-
-            if (admins) {
-                for (const admin of admins) {
-                    await EmailService.sendEmail({
-                        to: admin.email,
-                        subject: 'New Item in Review Queue',
-                        html: `
-                            <h2>New Review Queue Item</h2>
-                            <p>A new item has been added to the review queue:</p>
-                            <ul>
-                                <li>Reason: ${reviewReason}</li>
-                                <li>Spam Score: ${spamScore || 0}/100</li>
-                                ${recaptchaScore ? `<li>reCAPTCHA Score: ${recaptchaScore}</li>` : ''}
-                            </ul>
-                            <p>Please review this item in the admin dashboard.</p>
-                        `,
-                    });
-                }
-            }
-        } catch (emailError) {
-            console.error('[REVIEW_QUEUE] Email error:', emailError);
-            // Don't fail the request if email fails
+            const { notifyAdmins } = await import('@/server/lib/services/notification-service');
+            await notifyAdmins('system_error', {
+                title: 'New Item in Review Queue',
+                message: `A new item has been added to the review queue. Reason: ${reviewReason}. Spam Score: ${spamScore || 0}/100${recaptchaScore ? `. reCAPTCHA Score: ${recaptchaScore}` : ''}.`,
+                resourceType: 'review_queue',
+                resourceId: queueItem.id,
+                metadata: {
+                    reviewReason,
+                    spamScore: spamScore || 0,
+                    recaptchaScore: recaptchaScore || null,
+                },
+            });
+        } catch (notifyError) {
+            console.error('[REVIEW_QUEUE] Notification error:', notifyError);
+            // Don't fail the request if notification fails
         }
 
         return NextResponse.json({
@@ -149,8 +137,13 @@ export async function GET(request: NextRequest) {
         const { data, error } = await query;
 
         if (error) {
+            console.error('[REVIEW_QUEUE] Query error:', error);
+            console.error('[REVIEW_QUEUE] Error details:', JSON.stringify(error, null, 2));
             return NextResponse.json(
-                { error: 'Failed to fetch review queue' },
+                { 
+                    error: 'Failed to fetch review queue',
+                    details: error.message || 'Unknown database error',
+                },
                 { status: 500 }
             );
         }

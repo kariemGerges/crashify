@@ -20,8 +20,21 @@ export async function checkEmailFilter(email: string): Promise<EmailFilterResult
     const emailDomain = email.split('@')[1]?.toLowerCase() || '';
 
     // Check whitelist first
-    const { data: whitelistData } = await supabase
-        .from('email_filters')
+    const { data: whitelistData } = await (
+        supabase.from('email_filters') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string | boolean) => {
+                    eq: (column: string, value: string | boolean) => {
+                        or: (filter: string) => {
+                            limit: (count: number) => Promise<{
+                                data: Array<{ reason: string | null }> | null;
+                            }>;
+                        };
+                    };
+                };
+            };
+        }
+    )
         .select('reason')
         .eq('type', 'whitelist')
         .eq('is_active', true)
@@ -38,8 +51,21 @@ export async function checkEmailFilter(email: string): Promise<EmailFilterResult
     }
 
     // Check blacklist
-    const { data: blacklistData } = await supabase
-        .from('email_filters')
+    const { data: blacklistData } = await (
+        supabase.from('email_filters') as unknown as {
+            select: (columns: string) => {
+                eq: (column: string, value: string | boolean) => {
+                    eq: (column: string, value: string | boolean) => {
+                        or: (filter: string) => {
+                            limit: (count: number) => Promise<{
+                                data: Array<{ reason: string | null }> | null;
+                            }>;
+                        };
+                    };
+                };
+            };
+        }
+    )
         .select('reason')
         .eq('type', 'blacklist')
         .eq('is_active', true)

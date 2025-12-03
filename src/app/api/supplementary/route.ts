@@ -79,8 +79,28 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Get original quote data for AI review
-        // TODO: Fetch original assessment quote data
+        // Get original assessment data for AI review
+        const { data: originalAssessment } = await (
+            serverClient.from('assessments') as unknown as {
+                select: (columns: string) => {
+                    eq: (column: string, value: string) => {
+                        single: () => Promise<{
+                            data: {
+                                id: string;
+                                assessed_quote_amount: number | null;
+                                repair_authority_path: string | null;
+                                assessed_quote_path: string | null;
+                            } | null;
+                        }>;
+                    };
+                };
+            }
+        )
+            .select('id, assessed_quote_amount, repair_authority_path, assessed_quote_path')
+            .eq('id', assessmentId)
+            .single();
+
+        const originalAmount = originalAssessment?.assessed_quote_amount || 0;
 
         // Create supplementary request
         const supplementaryData: SupplementaryInsert = {
@@ -122,13 +142,62 @@ export async function POST(request: NextRequest) {
         // REQ-143: Send to Claude for review if PDF available
         if (pdfPath) {
             try {
-                // TODO: Extract text from PDF and send to Claude
-                // const pdfText = await extractPDFText(pdfPath);
-                // const aiReview = await reviewSupplementaryQuote(originalQuote, supplementaryQuote, originalAmount);
+                const { extractPDFText } = await import('@/server/lib/utils/pdf-extractor');
+                const { extractDataFromPDF, reviewSupplementaryQuote } = await import('@/server/lib/services/claude-service');
+                
+                // Extract text from supplementary PDF
+                const pdfText = await extractPDFText(pdfPath);
+                const supplementaryQuote = await extractDataFromPDF(pdfText);
+
+                // Extract original quote if available
+                let originalQuote: Awaited<ReturnType<typeof extractDataFromPDF>> | null = null;
+                if (originalAssessment?.assessed_quote_path) {
+                    try {
+                        const originalPdfText = await extractPDFText(originalAssessment.assessed_quote_path);
+                        originalQuote = await extractDataFromPDF(originalPdfText);
+                    } catch (originalError) {
+                        console.warn('[SUPPLEMENTARY] Could not extract original quote:', originalError);
+                    }
+                }
+
+                // Review with Claude AI
+                const aiReview = await reviewSupplementaryQuote(
+                    originalQuote || { quoteAmount: originalAmount },
+                    supplementaryQuote,
+                    originalAmount
+                );
+
                 // Update supplementary with AI recommendation
+                await (serverClient.from('supplementary_requests') as unknown as {
+                    update: (values: {
+                        ai_recommendation: string;
+                        ai_confidence: number;
+                        metadata: Record<string, unknown>;
+                    }) => {
+                        eq: (column: string, value: string) => Promise<unknown>;
+                    };
+                })
+                    .update({
+                        ai_recommendation: aiReview.reasoning,
+                        ai_confidence: aiReview.confidence,
+                        metadata: {
+                            ...supplementary.metadata as Record<string, unknown>,
+                            aiReview: {
+                                shouldApprove: aiReview.shouldApprove,
+                                recommendedAmount: aiReview.recommendedAmount,
+                                concerns: aiReview.concerns,
+                            },
+                        },
+                    })
+                    .eq('id', supplementary.id);
+
+                console.log('[SUPPLEMENTARY] AI review completed:', {
+                    shouldApprove: aiReview.shouldApprove,
+                    confidence: aiReview.confidence,
+                });
             } catch (aiError) {
                 console.error('[SUPPLEMENTARY] AI review error:', aiError);
-                // Continue without AI review
+                // Continue without AI review - request is still created
             }
         }
 
@@ -160,7 +229,17 @@ export async function POST(request: NextRequest) {
 // GET: List supplementary requests
 export async function GET(request: NextRequest) {
     try {
-        const user = await getSession();
+        let user;
+        try {
+            user = await getSession();
+        } catch (sessionError) {
+            console.error('[SUPPLEMENTARY] Session error:', sessionError);
+            return NextResponse.json(
+                { error: 'Unauthorized', details: 'Session validation failed' },
+                { status: 401 }
+            );
+        }
+
         if (!user) {
             return NextResponse.json(
                 { error: 'Unauthorized' },
@@ -169,30 +248,45 @@ export async function GET(request: NextRequest) {
         }
 
         // Use service role client to bypass RLS (we've already verified user is authenticated)
-        const serverClient = createServerClient();
+        let serverClient;
+        try {
+            serverClient = createServerClient();
+        } catch (clientError) {
+            console.error('[SUPPLEMENTARY] Client creation error:', clientError);
+            return NextResponse.json(
+                { error: 'Internal server error', details: 'Failed to initialize database client' },
+                { status: 500 }
+            );
+        }
 
         const searchParams = request.nextUrl.searchParams;
         const assessmentId = searchParams.get('assessmentId');
         const status = searchParams.get('status');
 
-        let query = serverClient
+        // Build query with filters
+        let queryBuilder = serverClient
             .from('supplementary_requests')
             .select('*')
             .order('created_at', { ascending: false });
 
         if (assessmentId) {
-            query = query.eq('original_assessment_id', assessmentId);
+            queryBuilder = queryBuilder.eq('original_assessment_id', assessmentId);
         }
 
         if (status) {
-            query = query.eq('status', status);
+            queryBuilder = queryBuilder.eq('status', status);
         }
 
-        const { data, error } = await query;
+        const { data, error } = await queryBuilder;
 
         if (error) {
+            console.error('[SUPPLEMENTARY] Query error:', error);
+            console.error('[SUPPLEMENTARY] Error details:', JSON.stringify(error, null, 2));
             return NextResponse.json(
-                { error: 'Failed to fetch supplementary requests' },
+                { 
+                    error: 'Failed to fetch supplementary requests',
+                    details: error.message || 'Unknown database error',
+                },
                 { status: 500 }
             );
         }
@@ -202,6 +296,7 @@ export async function GET(request: NextRequest) {
         });
     } catch (error) {
         console.error('[SUPPLEMENTARY] List error:', error);
+        console.error('[SUPPLEMENTARY] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
         return NextResponse.json(
             {
                 error: 'Failed to fetch supplementary requests',

@@ -34,6 +34,8 @@ import { QuoteRequestsTab } from '../Admin/QuoteRequestsTab';
 import { ComplaintsTab } from '../Admin/ComplaintsTab';
 import { SupplementaryRequestsTab } from '../Admin/SupplementaryRequestsTab';
 import { ReviewQueueTab } from '../Admin/ReviewQueueTab';
+import { EmailFiltersTab } from '../Admin/EmailFiltersTab';
+import { NotificationBell } from '../Admin/NotificationBell';
 import { useToast } from '../Toast';
 import { ConfirmModal } from '../Admin/ConfirmModal';
 
@@ -127,13 +129,27 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             id: 'overview',
             icon: BarChart3,
             label: 'Overview',
-            roles: ['super_admin', 'admin', 'manager', 'reviewer', 'assessor', 'read_only'],
+            roles: [
+                'super_admin',
+                'admin',
+                'manager',
+                'reviewer',
+                'assessor',
+                'read_only',
+            ],
         },
         {
             id: 'claims',
             icon: FileText,
             label: 'Claims',
-            roles: ['super_admin', 'admin', 'manager', 'reviewer', 'assessor', 'read_only'],
+            roles: [
+                'super_admin',
+                'admin',
+                'manager',
+                'reviewer',
+                'assessor',
+                'read_only',
+            ],
         },
         {
             id: 'complaints',
@@ -154,6 +170,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             roles: ['super_admin', 'admin', 'manager', 'reviewer'],
         },
         {
+            id: 'email-filters',
+            icon: Mail,
+            label: 'Email Filters',
+            roles: ['super_admin', 'admin'],
+        },
+        {
             id: 'claims-tokens',
             icon: FileText,
             label: 'Claims Tokens',
@@ -171,7 +193,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             label: 'Users',
             roles: ['super_admin', 'admin', 'manager'],
         },
-        { id: 'settings', icon: Settings, label: 'Settings', roles: ['super_admin', 'admin'] },
+        {
+            id: 'settings',
+            icon: Settings,
+            label: 'Settings',
+            roles: ['super_admin', 'admin'],
+        },
     ];
 
     // Filter the menu items based on the user's role
@@ -420,6 +447,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                     )}
                                 </div>
                             </div>
+                            <NotificationBell />
                             <button
                                 onClick={handleLogout}
                                 className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
@@ -493,10 +521,15 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                         {activeTab === 'complaints' && <ComplaintsTab />}
 
                         {/* Supplementary Requests Tab */}
-                        {activeTab === 'supplementary' && <SupplementaryRequestsTab />}
+                        {activeTab === 'supplementary' && (
+                            <SupplementaryRequestsTab />
+                        )}
 
                         {/* Review Queue Tab */}
                         {activeTab === 'review-queue' && <ReviewQueueTab />}
+
+                        {/* Email Filters Tab */}
+                        {activeTab === 'email-filters' && <EmailFiltersTab />}
 
                         {/* Quote Requests Tab */}
                         {activeTab === 'quote-requests' && <QuoteRequestsTab />}

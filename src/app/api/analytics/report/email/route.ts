@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         // Calculate revenue
         let revenue = 0;
         if (revenueData && Array.isArray(revenueData)) {
-            revenue = revenueData.reduce((sum, item) => {
+            revenue = (revenueData as Array<{ payment_amount: number | null }>).reduce((sum, item) => {
                 const amount = typeof item.payment_amount === 'number' ? item.payment_amount : 0;
                 return sum + amount;
             }, 0);

@@ -7,9 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/server/lib/supabase/client';
 import { getSession } from '@/server/lib/auth/session';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
-import type { Database } from '@/server/lib/types/database.types';
-
-type AssessmentRow = Database['public']['Tables']['assessments']['Row'];
+import type { Database, Json } from '@/server/lib/types/database.types';
 
 // Mark as dynamic since it uses cookies for authentication
 export const dynamic = 'force-dynamic';
@@ -96,8 +94,21 @@ export async function GET() {
 
         // REQ-43: Revenue this month (from payment_id if available)
         // Calculate from paid quote requests
-        const { data: revenueData } = await serverClient
-            .from('quote_requests')
+        const { data: revenueData } = await (
+            serverClient.from('quote_requests') as unknown as {
+                select: (columns: string) => {
+                    eq: (column: string, value: string) => {
+                        not: (column: string, operator: string, value: null) => {
+                            gte: (column: string, value: string) => {
+                                lte: (column: string, value: string) => Promise<{
+                                    data: Array<{ payment_amount: number | null }> | null;
+                                }>;
+                            };
+                        };
+                    };
+                };
+            }
+        )
             .select('payment_amount')
             .eq('status', 'payment_received')
             .not('payment_amount', 'is', null)
@@ -187,9 +198,45 @@ export async function GET() {
             .map(([name, count]) => ({ name, count }));
 
         // REQ-48: Bar chart - top repairers
-        // Note: This would require a repairers table or extraction from assessment data
-        const topRepairers: Array<{ name: string; count: number }> = [];
-        // TODO: Implement when repairer data is available
+        // Extract repairer information from assessments metadata or company_name
+        const { data: repairerAssessments } = await (
+            serverClient.from('assessments') as unknown as {
+                select: (columns: string) => {
+                    is: (column: string, value: null) => Promise<{
+                        data: Array<{ company_name: string; metadata: Json | null }> | null;
+                    }>;
+                };
+            }
+        )
+            .select('company_name, metadata')
+            .is('deleted_at', null);
+
+        const repairerCounts: Record<string, number> = {};
+        if (repairerAssessments) {
+            repairerAssessments.forEach((assessment) => {
+                // Try to get repairer name from metadata or use company_name
+                let repairerName: string | null = null;
+                
+                if (assessment.metadata && typeof assessment.metadata === 'object') {
+                    const metadata = assessment.metadata as Record<string, unknown>;
+                    repairerName = (metadata.repairer_name as string) || 
+                                  (metadata.repairerName as string) || 
+                                  null;
+                }
+                
+                // Fallback to company_name if no repairer name in metadata
+                const name = repairerName || assessment.company_name || 'Unknown';
+                
+                if (name && name !== 'Unknown') {
+                    repairerCounts[name] = (repairerCounts[name] || 0) + 1;
+                }
+            });
+        }
+
+        const topRepairers = Object.entries(repairerCounts)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 10)
+            .map(([name, count]) => ({ name, count }));
 
         // REQ-49: Bar chart - average completion time by month
         // Run all monthly completion queries in parallel
@@ -240,8 +287,21 @@ export async function GET() {
             const monthEnd = endOfMonth(subMonths(now, i));
             
             // Calculate revenue for this month
-            const { data: monthRevenueData } = await serverClient
-                .from('quote_requests')
+            const { data: monthRevenueData } = await (
+                serverClient.from('quote_requests') as unknown as {
+                    select: (columns: string) => {
+                        eq: (column: string, value: string) => {
+                            not: (column: string, operator: string, value: null) => {
+                                gte: (column: string, value: string) => {
+                                    lte: (column: string, value: string) => Promise<{
+                                        data: Array<{ payment_amount: number | null }> | null;
+                                    }>;
+                                };
+                            };
+                        };
+                    };
+                }
+            )
                 .select('payment_amount')
                 .eq('status', 'payment_received')
                 .not('payment_amount', 'is', null)

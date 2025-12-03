@@ -241,6 +241,37 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // REQ-115: Notify admins of new assessment
+        // REQ-119: Notify client of submission received
+        try {
+            const { notifyAdmins, notifyClient } = await import('@/server/lib/services/notification-service');
+            
+            // Notify admins
+            await notifyAdmins('assessment_new', {
+                title: 'New Assessment Submitted',
+                message: `A new ${formData.assessmentType} assessment has been submitted by ${formData.yourName} (${formData.yourEmail}) for ${formData.companyName}.`,
+                resourceType: 'assessment',
+                resourceId: assessment.id,
+                metadata: {
+                    assessmentType: formData.assessmentType,
+                    companyName: formData.companyName,
+                },
+            });
+
+            // Notify client
+            await notifyClient(formData.yourEmail, 'submission_received', {
+                title: 'Assessment Submission Received',
+                message: `Thank you for submitting your ${formData.assessmentType} assessment. We have received your submission and will begin processing it shortly.`,
+                assessmentId: assessment.id,
+                metadata: {
+                    assessmentType: formData.assessmentType,
+                },
+            });
+        } catch (notifyError) {
+            console.error('[ASSESSMENT] Notification error (non-critical):', notifyError);
+            // Don't fail the request if notifications fail
+        }
+
         // Invalidate cache
         revalidateTag('assessments-list');
         revalidateTag('stats');

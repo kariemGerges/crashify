@@ -8,6 +8,7 @@ import { getSession } from '@/server/lib/auth/session';
 import { getQuarantinedEmails, reviewQuarantinedEmail } from '@/server/lib/services/email-quarantine';
 import { requireCsrfToken } from '@/server/lib/security/csrf';
 import { EmailProcessor } from '@/server/lib/services/email-processor';
+import type { Database } from '@/server/lib/types/database.types';
 
 // GET: List quarantined emails
 export async function GET(request: NextRequest) {
@@ -78,13 +79,75 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Get quarantined email data before updating
+        const { createServerClient } = await import('@/server/lib/supabase/client');
+        const serverClient = createServerClient();
+        
+        const { data: quarantinedEmail } = await (
+            serverClient.from('email_quarantine') as unknown as {
+                select: (columns?: string) => {
+                    eq: (column: string, value: string) => {
+                        single: () => Promise<{
+                            data: Database['public']['Tables']['email_quarantine']['Row'] | null;
+                            error: { message: string } | null;
+                        }>;
+                    };
+                };
+            }
+        )
+            .select('*')
+            .eq('id', quarantine_id)
+            .single();
+
+        if (!quarantinedEmail) {
+            return NextResponse.json(
+                { error: 'Quarantined email not found' },
+                { status: 404 }
+            );
+        }
+
         await reviewQuarantinedEmail(quarantine_id, action, user.id, notes);
 
-        // If approved, process the email (this would require storing the original email data)
-        // For now, we'll just mark it as reviewed
+        // If approved, re-process the email
         if (action === 'approve') {
-            // TODO: Re-process the quarantined email if needed
-            console.log(`[QUARANTINE] Email ${quarantine_id} approved by ${user.id}`);
+            try {
+                // Reconstruct ParsedMail object from stored data
+                const emailProcessor = new EmailProcessor();
+                
+                // Create a minimal email structure for processing
+                // Note: This is a simplified approach - in production, you might want to store the full raw email
+                const rawEmailData = quarantinedEmail.raw_email_data as Record<string, unknown> | null;
+                const reconstructedEmail = {
+                    from: {
+                        text: quarantinedEmail.email_from,
+                        value: [{ address: quarantinedEmail.email_from }],
+                    },
+                    subject: quarantinedEmail.email_subject || '',
+                    text: quarantinedEmail.email_body || '',
+                    html: quarantinedEmail.email_html || null,
+                    attachments: [],
+                    date: quarantinedEmail.created_at ? new Date(quarantinedEmail.created_at) : new Date(),
+                    messageId: (rawEmailData?.messageId as string) || '',
+                    headers: (rawEmailData?.headers as Record<string, unknown>) || {},
+                    headerLines: [],
+                    to: { text: '', value: [] },
+                    cc: { text: '', value: [] },
+                    bcc: { text: '', value: [] },
+                    replyTo: { text: '', value: [] },
+                    inReplyTo: null,
+                    references: [],
+                    priority: 'normal',
+                    flags: [],
+                } as Parameters<typeof emailProcessor.processEmailDirectly>[0];
+
+                // Process the email (this will skip quarantine since it's already approved)
+                await emailProcessor.processEmailDirectly(reconstructedEmail);
+                
+                console.log(`[QUARANTINE] Email ${quarantine_id} approved and re-processed by ${user.id}`);
+            } catch (processError) {
+                console.error(`[QUARANTINE] Error re-processing approved email:`, processError);
+                // Don't fail the request - email is already marked as approved
+            }
         }
 
         return NextResponse.json({

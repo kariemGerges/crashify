@@ -50,8 +50,20 @@ export async function PATCH(
             updateData.reason = body.reason;
         }
 
-        const { data, error } = await supabase
-            .from('email_filters')
+        const { data, error } = await (
+            supabase.from('email_filters') as unknown as {
+                update: (values: EmailFilterUpdate) => {
+                    eq: (column: string, value: string) => {
+                        select: () => {
+                            single: () => Promise<{
+                                data: Database['public']['Tables']['email_filters']['Row'] | null;
+                                error: { message: string } | null;
+                            }>;
+                        };
+                    };
+                };
+            }
+        )
             .update(updateData)
             .eq('id', id)
             .select()

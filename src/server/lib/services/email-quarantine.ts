@@ -5,9 +5,12 @@
 
 import { createServerClient } from '@/server/lib/supabase/client';
 import type { ParsedMail } from 'mailparser';
-import type { Database } from '@/server/lib/types/database.types';
+import type { Database, Json } from '@/server/lib/types/database.types';
 
-type EmailQuarantineInsert = Database['public']['Tables']['email_quarantine']['Insert'];
+type EmailQuarantineInsert =
+    Database['public']['Tables']['email_quarantine']['Insert'];
+type EmailQuarantineUpdate =
+    Database['public']['Tables']['email_quarantine']['Update'];
 
 export interface QuarantineEmailParams {
     email: ParsedMail;
@@ -20,12 +23,32 @@ export interface QuarantineEmailParams {
 /**
  * Quarantine a suspicious email for manual review
  */
-export async function quarantineEmail(params: QuarantineEmailParams): Promise<string> {
+export async function quarantineEmail(
+    params: QuarantineEmailParams
+): Promise<string> {
     const supabase = createServerClient();
     const { email, emailUid, spamScore, spamFlags, reason } = params;
 
+    // Convert Headers object (Map) to plain object for JSON serialization
+    // HeaderValue can be string, string[], Date, AddressObject, StructuredHeader, etc.
+    // Convert all to JSON-serializable format
+    const headersObj: Record<string, unknown> = {};
+    if (email.headers) {
+        for (const [key, value] of email.headers) {
+            if (value instanceof Date) {
+                headersObj[key] = value.toISOString();
+            } else if (typeof value === 'string' || Array.isArray(value)) {
+                headersObj[key] = value;
+            } else {
+                // Convert complex objects (AddressObject, StructuredHeader, etc.) to JSON
+                headersObj[key] = JSON.parse(JSON.stringify(value));
+            }
+        }
+    }
+
     const quarantineData: EmailQuarantineInsert = {
-        email_from: email.from?.text || email.from?.value?.[0]?.address || 'unknown',
+        email_from:
+            email.from?.text || email.from?.value?.[0]?.address || 'unknown',
         email_subject: email.subject || null,
         email_body: email.text || null,
         email_html: email.html || null,
@@ -35,15 +58,25 @@ export async function quarantineEmail(params: QuarantineEmailParams): Promise<st
         email_uid: emailUid,
         attachments_count: email.attachments?.length || 0,
         raw_email_data: {
-            headers: email.headers,
+            headers: headersObj as Json,
             date: email.date?.toISOString(),
             messageId: email.messageId,
-        } as unknown as Record<string, unknown>,
+        } as Json,
         review_action: 'pending',
     };
 
-    const { data, error } = await supabase
-        .from('email_quarantine')
+    const { data, error } = await (
+        supabase.from('email_quarantine') as unknown as {
+            insert: (values: EmailQuarantineInsert) => {
+                select: (columns: string) => {
+                    single: () => Promise<{
+                        data: { id: string } | null;
+                        error: { message: string } | null;
+                    }>;
+                };
+            };
+        }
+    )
         .insert(quarantineData)
         .select('id')
         .single();
@@ -57,7 +90,9 @@ export async function quarantineEmail(params: QuarantineEmailParams): Promise<st
         throw new Error('Failed to quarantine email: No data returned');
     }
 
-    console.log(`[EmailQuarantine] Email ${emailUid} quarantined with ID: ${data.id}`);
+    console.log(
+        `[EmailQuarantine] Email ${emailUid} quarantined with ID: ${data.id}`
+    );
     return data.id;
 }
 
@@ -75,7 +110,10 @@ export async function getQuarantinedEmails(limit = 50) {
         .limit(limit);
 
     if (error) {
-        console.error('[EmailQuarantine] Error fetching quarantined emails:', error);
+        console.error(
+            '[EmailQuarantine] Error fetching quarantined emails:',
+            error
+        );
         throw new Error(`Failed to fetch quarantined emails: ${error.message}`);
     }
 
@@ -93,8 +131,18 @@ export async function reviewQuarantinedEmail(
 ): Promise<void> {
     const supabase = createServerClient();
 
-    const { error } = await supabase
-        .from('email_quarantine')
+    const { error } = await (
+        supabase.from('email_quarantine') as unknown as {
+            update: (values: EmailQuarantineUpdate) => {
+                eq: (
+                    column: string,
+                    value: string
+                ) => Promise<{
+                    error: { message: string } | null;
+                }>;
+            };
+        }
+    )
         .update({
             review_action: action,
             reviewed_by: reviewedBy,
@@ -109,4 +157,3 @@ export async function reviewQuarantinedEmail(
         throw new Error(`Failed to review email: ${error.message}`);
     }
 }
-

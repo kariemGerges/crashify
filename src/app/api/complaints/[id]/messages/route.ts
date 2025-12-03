@@ -4,14 +4,15 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/server/lib/supabase/client';
+import { createServerClient } from '@/server/lib/supabase/client';
 import { requireCsrfToken } from '@/server/lib/security/csrf';
 import { logAuditEventFromRequest } from '@/server/lib/audit/logger';
 import { getSession } from '@/server/lib/auth/session';
 import { EmailService } from '@/server/lib/services/email-service';
 import type { Database } from '@/server/lib/types/database.types';
 
-type ComplaintMessageInsert = Database['public']['Tables']['complaint_messages']['Insert'];
+type ComplaintMessageInsert =
+    Database['public']['Tables']['complaint_messages']['Insert'];
 
 // POST: Send message to complainant (REQ-71)
 export async function POST(
@@ -48,12 +49,21 @@ export async function POST(
             );
         }
 
+        // Use service role client to bypass RLS
+        const serverClient = createServerClient();
+
         // Get complaint to access complainant email
-        const { data: complaint } = (await supabase
+        const { data: complaint } = (await serverClient
             .from('complaints')
             .select('complainant_email, complainant_name, complaint_number')
             .eq('id', id)
-            .single()) as { data: { complainant_email: string; complainant_name: string; complaint_number: string } | null };
+            .single()) as {
+            data: {
+                complainant_email: string;
+                complainant_name: string;
+                complaint_number: string;
+            } | null;
+        };
 
         if (!complaint) {
             return NextResponse.json(
@@ -72,11 +82,13 @@ export async function POST(
         };
 
         const { data: savedMessage, error: insertError } = await (
-            supabase.from('complaint_messages') as unknown as {
+            serverClient.from('complaint_messages') as unknown as {
                 insert: (values: ComplaintMessageInsert[]) => {
                     select: () => {
                         single: () => Promise<{
-                            data: Database['public']['Tables']['complaint_messages']['Row'] | null;
+                            data:
+                                | Database['public']['Tables']['complaint_messages']['Row']
+                                | null;
                             error: { message: string } | null;
                         }>;
                     };
@@ -106,16 +118,26 @@ export async function POST(
                     html: `
                         <h2>Complaint Update</h2>
                         <p>Dear ${complaint.complainant_name},</p>
-                        <p>We have an update regarding your complaint (${complaint.complaint_number}):</p>
+                        <p>We have an update regarding your complaint (${
+                            complaint.complaint_number
+                        }):</p>
                         <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
                             ${message.trim().replace(/\n/g, '<br>')}
                         </div>
-                        <p>You can track the status of your complaint at: <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://crashify.com.au'}/complaint/track?number=${complaint.complaint_number}">Track Complaint</a></p>
+                        <p>You can track the status of your complaint at: <a href="${
+                            process.env.NEXT_PUBLIC_APP_URL ||
+                            'https://crashify.com.au'
+                        }/complaint/track?number=${
+                            complaint.complaint_number
+                        }">Track Complaint</a></p>
                         <p>Best regards,<br>Crashify Team</p>
                     `,
                 });
             } catch (emailError) {
-                console.error('[COMPLAINT_MESSAGE] Email send error:', emailError);
+                console.error(
+                    '[COMPLAINT_MESSAGE] Email send error:',
+                    emailError
+                );
                 // Don't fail the request if email fails
             }
         }
@@ -123,7 +145,9 @@ export async function POST(
         // Log audit event
         await logAuditEventFromRequest(request, {
             userId: user.id,
-            action: 'complaints.message_sent' as unknown as Parameters<typeof logAuditEventFromRequest>[1]['action'],
+            action: 'complaints.message_sent' as unknown as Parameters<
+                typeof logAuditEventFromRequest
+            >[1]['action'],
             resourceType: 'complaint',
             resourceId: id,
             details: {
@@ -141,10 +165,10 @@ export async function POST(
         return NextResponse.json(
             {
                 error: 'Failed to send message',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                details:
+                    error instanceof Error ? error.message : 'Unknown error',
             },
             { status: 500 }
         );
     }
 }
-

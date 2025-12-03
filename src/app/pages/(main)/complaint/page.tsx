@@ -181,7 +181,7 @@ export default function ComplaintPage() {
 
             // Redirect to tracking page after 3 seconds
             setTimeout(() => {
-                router.push(`/complaint/track?number=${result.complaintNumber}`);
+                router.push(`/pages/complaint/track?number=${result.complaintNumber}`);
             }, 3000);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to submit complaint');

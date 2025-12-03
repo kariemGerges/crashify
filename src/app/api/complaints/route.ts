@@ -4,7 +4,7 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/server/lib/supabase/client';
+import { supabase, createServerClient } from '@/server/lib/supabase/client';
 import { requireCsrfToken } from '@/server/lib/security/csrf';
 import { logAuditEventFromRequest } from '@/server/lib/audit/logger';
 import { EmailService } from '@/server/lib/services/email-service';
@@ -35,8 +35,12 @@ export async function POST(request: NextRequest) {
         const category = formData.get('category') as string;
         const priority = (formData.get('priority') as string) || 'medium';
         const description = formData.get('description') as string;
-        const assessmentReference = formData.get('assessmentReference') as string | null;
-        const submitTimeSeconds = parseFloat((formData.get('submitTimeSeconds') as string) || '0');
+        const assessmentReference = formData.get('assessmentReference') as
+            | string
+            | null;
+        const submitTimeSeconds = parseFloat(
+            (formData.get('submitTimeSeconds') as string) || '0'
+        );
         const attachments = formData.getAll('attachments') as File[];
 
         // Validation
@@ -79,13 +83,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Use service role client to bypass RLS (we have CSRF and validation)
+        const serverClient = createServerClient();
+
         // Find assessment if reference provided (REQ-74)
         let assessmentId: string | null = null;
         if (assessmentReference) {
-            const { data: assessment } = (await supabase
+            const { data: assessment } = (await serverClient
                 .from('assessments')
                 .select('id')
-                .or(`id.eq.${assessmentReference},claim_reference.eq.${assessmentReference}`)
+                .or(
+                    `id.eq.${assessmentReference},claim_reference.eq.${assessmentReference}`
+                )
                 .single()) as { data: { id: string } | null };
 
             if (assessment) {
@@ -105,13 +114,16 @@ export async function POST(request: NextRequest) {
             status: 'new',
             metadata: {
                 submitTimeSeconds,
-                ipAddress: validateAndExtractIp(request.headers.get('x-forwarded-for')) || undefined,
+                ipAddress:
+                    validateAndExtractIp(
+                        request.headers.get('x-forwarded-for')
+                    ) || undefined,
                 userAgent: request.headers.get('user-agent') || undefined,
             },
         };
 
         const { data: complaint, error: insertError } = await (
-            supabase.from('complaints') as unknown as {
+            serverClient.from('complaints') as unknown as {
                 insert: (values: ComplaintInsert[]) => {
                     select: () => {
                         single: () => Promise<{
@@ -139,38 +151,124 @@ export async function POST(request: NextRequest) {
 
         // Upload attachments (REQ-62)
         if (attachments.length > 0) {
+            console.log(
+                '[COMPLAINT] Starting upload of',
+                attachments.length,
+                'attachment(s)'
+            );
             for (const file of attachments) {
                 try {
                     const fileExt = file.name.split('.').pop() || 'bin';
-                    const fileName = `${complaint.id}/${Date.now()}_${file.name}`;
+                    const fileName = `${complaint.id}/${Date.now()}_${
+                        file.name
+                    }`;
                     const fileBuffer = await file.arrayBuffer();
 
-                    const { error: uploadError } = await supabase.storage
-                        .from(BUCKET_NAME)
-                        .upload(fileName, fileBuffer, {
-                            contentType: file.type,
-                            upsert: false,
-                        });
+                    console.log(
+                        '[COMPLAINT] Uploading file:',
+                        file.name,
+                        'Size:',
+                        file.size,
+                        'Type:',
+                        file.type
+                    );
 
-                    if (!uploadError) {
-                        // Save attachment record
-                        await (supabase.from('complaint_attachments') as unknown as {
-                            insert: (values: unknown[]) => Promise<unknown>;
-                        }).insert([
-                            {
+                    const { data: uploadData, error: uploadError } =
+                        await serverClient.storage
+                            .from(BUCKET_NAME)
+                            .upload(fileName, fileBuffer, {
+                                contentType: file.type,
+                                upsert: false,
+                            });
+
+                    if (uploadError) {
+                        console.error(
+                            '[COMPLAINT] File upload error:',
+                            uploadError,
+                            'File:',
+                            file.name
+                        );
+                        continue; // Skip this file
+                    }
+
+                    console.log(
+                        '[COMPLAINT] File uploaded successfully to storage:',
+                        fileName
+                    );
+
+                    // Save attachment record
+                    const { data: insertedAttachment, error: insertError } =
+                        await (
+                            serverClient.from(
+                                'complaint_attachments'
+                            ) as unknown as {
+                                insert: (values: {
+                                    complaint_id: string;
+                                    file_name: string;
+                                    file_size: number;
+                                    file_type: string;
+                                    storage_path: string;
+                                    uploaded_by?: string | null;
+                                }) => {
+                                    select: () => {
+                                        single: () => Promise<{
+                                            data:
+                                                | Database['public']['Tables']['complaint_attachments']['Row']
+                                                | null;
+                                            error: { message: string } | null;
+                                        }>;
+                                    };
+                                };
+                            }
+                        )
+                            .insert({
                                 complaint_id: complaint.id,
                                 file_name: file.name,
                                 file_size: file.size,
                                 file_type: file.type,
                                 storage_path: fileName,
-                            },
-                        ]);
+                            })
+                            .select()
+                            .single();
+
+                    if (insertError) {
+                        console.error(
+                            '[COMPLAINT] Error saving attachment record:',
+                            insertError
+                        );
+                        console.error(
+                            '[COMPLAINT] Insert error details:',
+                            JSON.stringify(insertError, null, 2)
+                        );
+                    } else if (insertedAttachment) {
+                        console.log(
+                            '[COMPLAINT] Successfully saved attachment record:',
+                            insertedAttachment.id,
+                            'File:',
+                            file.name
+                        );
+                    } else {
+                        console.error(
+                            '[COMPLAINT] No data returned from insert, but no error either'
+                        );
                     }
                 } catch (fileError) {
-                    console.error('[COMPLAINT] File upload error:', fileError);
+                    console.error(
+                        '[COMPLAINT] File upload exception:',
+                        fileError
+                    );
+                    if (fileError instanceof Error) {
+                        console.error(
+                            '[COMPLAINT] Error stack:',
+                            fileError.stack
+                        );
+                    }
                     // Continue with other files
                 }
             }
+            console.log('[COMPLAINT] Finished processing attachments');
+        } else {
+            console.log('[COMPLAINT] No attachments to upload');
         }
 
         // Send auto-acknowledgment email (REQ-63)
@@ -182,9 +280,16 @@ export async function POST(request: NextRequest) {
                     <h2>Complaint Received</h2>
                     <p>Dear ${name},</p>
                     <p>Thank you for contacting us. We have received your complaint and assigned it the following reference number:</p>
-                    <p style="font-size: 18px; font-weight: bold; color: #f59e0b;">${complaint.complaint_number}</p>
+                    <p style="font-size: 18px; font-weight: bold; color: #f59e0b;">${
+                        complaint.complaint_number
+                    }</p>
                     <p>We will investigate your complaint and respond within the timeframe based on the priority level you selected.</p>
-                    <p>You can track the status of your complaint at: <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://crashify.com.au'}/complaint/track?number=${complaint.complaint_number}">Track Complaint</a></p>
+                    <p>You can track the status of your complaint at: <a href="${
+                        process.env.NEXT_PUBLIC_APP_URL ||
+                        'https://crashify.com.au'
+                    }/complaint/track?number=${
+                        complaint.complaint_number
+                    }">Track Complaint</a></p>
                     <p>Best regards,<br>Crashify Team</p>
                 `,
             });
@@ -193,9 +298,35 @@ export async function POST(request: NextRequest) {
             // Don't fail the request if email fails
         }
 
+        // REQ-117: Notify admins of new complaint
+        try {
+            const { notifyAdmins } = await import(
+                '@/server/lib/services/notification-service'
+            );
+            await notifyAdmins('complaint_new', {
+                title: 'New Complaint Received',
+                message: `A new ${priority} priority complaint has been submitted by ${name} (${email}): ${complaint.complaint_number}`,
+                resourceType: 'complaint',
+                resourceId: complaint.id,
+                metadata: {
+                    complaintNumber: complaint.complaint_number,
+                    category,
+                    priority,
+                    complainantName: name,
+                },
+            });
+        } catch (notifyError) {
+            console.error(
+                '[COMPLAINT] Notification error (non-critical):',
+                notifyError
+            );
+        }
+
         // Log audit event
         await logAuditEventFromRequest(request, {
-            action: 'complaints.create' as unknown as Parameters<typeof logAuditEventFromRequest>[1]['action'],
+            action: 'complaints.create' as unknown as Parameters<
+                typeof logAuditEventFromRequest
+            >[1]['action'],
             resourceType: 'complaint',
             resourceId: complaint.id,
             details: {
@@ -216,7 +347,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
             {
                 error: 'Failed to create complaint',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                details:
+                    error instanceof Error ? error.message : 'Unknown error',
             },
             { status: 500 }
         );
@@ -226,7 +358,18 @@ export async function POST(request: NextRequest) {
 // GET: List complaints (admin only)
 export async function GET(request: NextRequest) {
     try {
-        const supabaseClient = supabase;
+        // Check authentication
+        const { getSession } = await import('@/server/lib/auth/session');
+        const user = await getSession();
+        if (!user) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+
+        // Use service role client to bypass RLS for admin access
+        const serverClient = createServerClient();
         const searchParams = request.nextUrl.searchParams;
 
         // Pagination
@@ -241,7 +384,7 @@ export async function GET(request: NextRequest) {
         const category = searchParams.get('category');
 
         // Build query
-        let query = supabaseClient
+        let query = serverClient
             .from('complaints')
             .select('*', { count: 'exact' })
             .order('created_at', { ascending: false });
@@ -286,10 +429,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(
             {
                 error: 'Failed to fetch complaints',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                details:
+                    error instanceof Error ? error.message : 'Unknown error',
             },
             { status: 500 }
         );
     }
 }
-

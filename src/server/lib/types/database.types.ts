@@ -55,6 +55,7 @@ export interface Database {
                         | 'processing'
                         | 'completed'
                         | 'cancelled';
+                    completed_at: string | null;
                     deleted_at: string | null;
                 };
                 Insert: {
@@ -97,6 +98,7 @@ export interface Database {
                         | 'processing'
                         | 'completed'
                         | 'cancelled';
+                    completed_at?: string | null;
                     deleted_at?: string | null;
                 };
                 Update: {
@@ -141,6 +143,7 @@ export interface Database {
                         | 'processing'
                         | 'completed'
                         | 'cancelled';
+                    completed_at?: string | null;
                     deleted_at?: string | null;
                 };
             };
@@ -522,6 +525,144 @@ export interface Database {
                     updated_at?: string;
                 };
             };
+            email_filters: {
+                Row: {
+                    id: string;
+                    type: 'whitelist' | 'blacklist';
+                    email_domain: string | null;
+                    email_address: string | null;
+                    reason: string | null;
+                    created_by: string | null;
+                    created_at: string;
+                    updated_at: string;
+                    is_active: boolean;
+                };
+                Insert: {
+                    id?: string;
+                    type: 'whitelist' | 'blacklist';
+                    email_domain?: string | null;
+                    email_address?: string | null;
+                    reason?: string | null;
+                    created_by?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                    is_active?: boolean;
+                };
+                Update: {
+                    id?: string;
+                    type?: 'whitelist' | 'blacklist';
+                    email_domain?: string | null;
+                    email_address?: string | null;
+                    reason?: string | null;
+                    created_by?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                    is_active?: boolean;
+                };
+            };
+            email_quarantine: {
+                Row: {
+                    id: string;
+                    email_from: string;
+                    email_subject: string | null;
+                    email_body: string | null;
+                    email_html: string | null;
+                    spam_score: number;
+                    spam_flags: string[];
+                    reason: string;
+                    email_uid: number | null;
+                    attachments_count: number;
+                    raw_email_data: Json | null;
+                    reviewed_by: string | null;
+                    reviewed_at: string | null;
+                    review_action: 'approve' | 'reject' | 'pending' | null;
+                    review_notes: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    email_from: string;
+                    email_subject?: string | null;
+                    email_body?: string | null;
+                    email_html?: string | null;
+                    spam_score?: number;
+                    spam_flags?: string[];
+                    reason: string;
+                    email_uid?: number | null;
+                    attachments_count?: number;
+                    raw_email_data?: Json | null;
+                    reviewed_by?: string | null;
+                    reviewed_at?: string | null;
+                    review_action?: 'approve' | 'reject' | 'pending' | null;
+                    review_notes?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    email_from?: string;
+                    email_subject?: string | null;
+                    email_body?: string | null;
+                    email_html?: string | null;
+                    spam_score?: number;
+                    spam_flags?: string[];
+                    reason?: string;
+                    email_uid?: number | null;
+                    attachments_count?: number;
+                    raw_email_data?: Json | null;
+                    reviewed_by?: string | null;
+                    reviewed_at?: string | null;
+                    review_action?: 'approve' | 'reject' | 'pending' | null;
+                    review_notes?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            notifications: {
+                Row: {
+                    id: string;
+                    user_id: string;
+                    type: 'assessment_new' | 'assessment_overdue' | 'complaint_new' | 'system_error' | 'status_change' | 'submission_received';
+                    title: string;
+                    message: string;
+                    resource_type: string | null;
+                    resource_id: string | null;
+                    priority: 'low' | 'medium' | 'high' | 'critical';
+                    metadata: Json;
+                    is_read: boolean;
+                    read_at: string | null;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    user_id: string;
+                    type: 'assessment_new' | 'assessment_overdue' | 'complaint_new' | 'system_error' | 'status_change' | 'submission_received';
+                    title: string;
+                    message: string;
+                    resource_type?: string | null;
+                    resource_id?: string | null;
+                    priority?: 'low' | 'medium' | 'high' | 'critical';
+                    metadata?: Json;
+                    is_read?: boolean;
+                    read_at?: string | null;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    user_id?: string;
+                    type?: 'assessment_new' | 'assessment_overdue' | 'complaint_new' | 'system_error' | 'status_change' | 'submission_received';
+                    title?: string;
+                    message?: string;
+                    resource_type?: string | null;
+                    resource_id?: string | null;
+                    priority?: 'low' | 'medium' | 'high' | 'critical';
+                    metadata?: Json;
+                    is_read?: boolean;
+                    read_at?: string | null;
+                    created_at?: string;
+                };
+            };
         };
         Functions: {
             get_assessment_full: {
@@ -543,6 +684,14 @@ export interface Database {
                     created_at: string;
                     rank: number;
                 }[];
+            };
+            mark_notification_read: {
+                Args: { notification_id: string; user_id_param: string };
+                Returns: boolean;
+            };
+            mark_all_notifications_read: {
+                Args: { user_id_param: string };
+                Returns: number;
             };
         };
     };
