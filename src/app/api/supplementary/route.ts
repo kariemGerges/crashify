@@ -10,7 +10,8 @@ import { requireCsrfToken } from '@/server/lib/security/csrf';
 import { logAuditEventFromRequest } from '@/server/lib/audit/logger';
 import type { Database } from '@/server/lib/types/database.types';
 
-type SupplementaryInsert = Database['public']['Tables']['supplementary_requests']['Insert'];
+type SupplementaryInsert =
+    Database['public']['Tables']['supplementary_requests']['Insert'];
 
 // POST: Create supplementary request
 export async function POST(request: NextRequest) {
@@ -66,7 +67,9 @@ export async function POST(request: NextRequest) {
         let pdfPath: string | null = null;
         if (pdfFile) {
             const fileBuffer = await pdfFile.arrayBuffer();
-            const fileName = `${assessmentId}/supplementary/${Date.now()}_${pdfFile.name}`;
+            const fileName = `${assessmentId}/supplementary/${Date.now()}_${
+                pdfFile.name
+            }`;
             const { error: uploadError } = await serverClient.storage
                 .from('Assessment-photos')
                 .upload(fileName, fileBuffer, {
@@ -83,7 +86,10 @@ export async function POST(request: NextRequest) {
         const { data: originalAssessment } = await (
             serverClient.from('assessments') as unknown as {
                 select: (columns: string) => {
-                    eq: (column: string, value: string) => {
+                    eq: (
+                        column: string,
+                        value: string
+                    ) => {
                         single: () => Promise<{
                             data: {
                                 id: string;
@@ -96,7 +102,9 @@ export async function POST(request: NextRequest) {
                 };
             }
         )
-            .select('id, assessed_quote_amount, repair_authority_path, assessed_quote_path')
+            .select(
+                'id, assessed_quote_amount, repair_authority_path, assessed_quote_path'
+            )
             .eq('id', assessmentId)
             .single();
 
@@ -118,7 +126,9 @@ export async function POST(request: NextRequest) {
                 insert: (values: SupplementaryInsert[]) => {
                     select: () => {
                         single: () => Promise<{
-                            data: Database['public']['Tables']['supplementary_requests']['Row'] | null;
+                            data:
+                                | Database['public']['Tables']['supplementary_requests']['Row']
+                                | null;
                             error: { message: string } | null;
                         }>;
                     };
@@ -142,21 +152,33 @@ export async function POST(request: NextRequest) {
         // REQ-143: Send to Claude for review if PDF available
         if (pdfPath) {
             try {
-                const { extractPDFText } = await import('@/server/lib/utils/pdf-extractor');
-                const { extractDataFromPDF, reviewSupplementaryQuote } = await import('@/server/lib/services/claude-service');
-                
+                const { extractPDFText } = await import(
+                    '@/server/lib/utils/pdf-extractor'
+                );
+                const { extractDataFromPDF, reviewSupplementaryQuote } =
+                    await import('@/server/lib/services/claude-service');
+
                 // Extract text from supplementary PDF
                 const pdfText = await extractPDFText(pdfPath);
                 const supplementaryQuote = await extractDataFromPDF(pdfText);
 
                 // Extract original quote if available
-                let originalQuote: Awaited<ReturnType<typeof extractDataFromPDF>> | null = null;
+                let originalQuote: Awaited<
+                    ReturnType<typeof extractDataFromPDF>
+                > | null = null;
                 if (originalAssessment?.assessed_quote_path) {
                     try {
-                        const originalPdfText = await extractPDFText(originalAssessment.assessed_quote_path);
-                        originalQuote = await extractDataFromPDF(originalPdfText);
+                        const originalPdfText = await extractPDFText(
+                            originalAssessment.assessed_quote_path
+                        );
+                        originalQuote = await extractDataFromPDF(
+                            originalPdfText
+                        );
                     } catch (originalError) {
-                        console.warn('[SUPPLEMENTARY] Could not extract original quote:', originalError);
+                        console.warn(
+                            '[SUPPLEMENTARY] Could not extract original quote:',
+                            originalError
+                        );
                     }
                 }
 
@@ -168,20 +190,28 @@ export async function POST(request: NextRequest) {
                 );
 
                 // Update supplementary with AI recommendation
-                await (serverClient.from('supplementary_requests') as unknown as {
-                    update: (values: {
-                        ai_recommendation: string;
-                        ai_confidence: number;
-                        metadata: Record<string, unknown>;
-                    }) => {
-                        eq: (column: string, value: string) => Promise<unknown>;
-                    };
-                })
+                await (
+                    serverClient.from('supplementary_requests') as unknown as {
+                        update: (values: {
+                            ai_recommendation: string;
+                            ai_confidence: number;
+                            metadata: Record<string, unknown>;
+                        }) => {
+                            eq: (
+                                column: string,
+                                value: string
+                            ) => Promise<unknown>;
+                        };
+                    }
+                )
                     .update({
                         ai_recommendation: aiReview.reasoning,
                         ai_confidence: aiReview.confidence,
                         metadata: {
-                            ...supplementary.metadata as Record<string, unknown>,
+                            ...((supplementary.metadata || {}) as Record<
+                                string,
+                                unknown
+                            >),
                             aiReview: {
                                 shouldApprove: aiReview.shouldApprove,
                                 recommendedAmount: aiReview.recommendedAmount,
@@ -204,7 +234,9 @@ export async function POST(request: NextRequest) {
         // Log audit event
         await logAuditEventFromRequest(request, {
             userId: user.id,
-            action: 'supplementary_created' as unknown as Parameters<typeof logAuditEventFromRequest>[1]['action'],
+            action: 'supplementary_created' as unknown as Parameters<
+                typeof logAuditEventFromRequest
+            >[1]['action'],
             resourceType: 'supplementary_request',
             resourceId: supplementary.id,
             success: true,
@@ -219,7 +251,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
             {
                 error: 'Failed to create supplementary request',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                details:
+                    error instanceof Error ? error.message : 'Unknown error',
             },
             { status: 500 }
         );
@@ -252,9 +285,15 @@ export async function GET(request: NextRequest) {
         try {
             serverClient = createServerClient();
         } catch (clientError) {
-            console.error('[SUPPLEMENTARY] Client creation error:', clientError);
+            console.error(
+                '[SUPPLEMENTARY] Client creation error:',
+                clientError
+            );
             return NextResponse.json(
-                { error: 'Internal server error', details: 'Failed to initialize database client' },
+                {
+                    error: 'Internal server error',
+                    details: 'Failed to initialize database client',
+                },
                 { status: 500 }
             );
         }
@@ -270,7 +309,10 @@ export async function GET(request: NextRequest) {
             .order('created_at', { ascending: false });
 
         if (assessmentId) {
-            queryBuilder = queryBuilder.eq('original_assessment_id', assessmentId);
+            queryBuilder = queryBuilder.eq(
+                'original_assessment_id',
+                assessmentId
+            );
         }
 
         if (status) {
@@ -281,9 +323,12 @@ export async function GET(request: NextRequest) {
 
         if (error) {
             console.error('[SUPPLEMENTARY] Query error:', error);
-            console.error('[SUPPLEMENTARY] Error details:', JSON.stringify(error, null, 2));
+            console.error(
+                '[SUPPLEMENTARY] Error details:',
+                JSON.stringify(error, null, 2)
+            );
             return NextResponse.json(
-                { 
+                {
                     error: 'Failed to fetch supplementary requests',
                     details: error.message || 'Unknown database error',
                 },
@@ -296,14 +341,17 @@ export async function GET(request: NextRequest) {
         });
     } catch (error) {
         console.error('[SUPPLEMENTARY] List error:', error);
-        console.error('[SUPPLEMENTARY] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        console.error(
+            '[SUPPLEMENTARY] Error stack:',
+            error instanceof Error ? error.stack : 'No stack trace'
+        );
         return NextResponse.json(
             {
                 error: 'Failed to fetch supplementary requests',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                details:
+                    error instanceof Error ? error.message : 'Unknown error',
             },
             { status: 500 }
         );
     }
 }
-
