@@ -1,6 +1,6 @@
 // =============================================
 // FILE: lib/services/email-processor.ts
-// Email processing service for intake@crashify.com.au
+// Email processing service for info@crashify.com.au
 // =============================================
 
 import Imap from 'imap';
@@ -51,13 +51,32 @@ export class EmailProcessor {
     private async connect(): Promise<void> {
         return new Promise((resolve, reject) => {
             const config = {
-                user: process.env.IMAP_USER || 'intake@crashify.com.au',
+                user: process.env.IMAP_USER || 'info@crashify.com.au',
                 password: process.env.IMAP_PASSWORD || '',
-                host: process.env.IMAP_HOST || 'imap.outlook.com',
+                // GoDaddy email hosting uses imap.secureserver.net
+                // For Outlook/Office 365, use imap.outlook.com
+                host: process.env.IMAP_HOST || 'imap.secureserver.net',
                 port: parseInt(process.env.IMAP_PORT || '993', 10),
                 tls: true,
                 tlsOptions: { rejectUnauthorized: false },
+                connTimeout: 30000, // 30 seconds connection timeout
+                authTimeout: 30000, // 30 seconds authentication timeout
             };
+
+            // Log configuration (without exposing password)
+            console.log('[EmailProcessor] Connecting to IMAP server...', {
+                host: config.host,
+                port: config.port,
+                user: config.user,
+                passwordLength: config.password.length,
+                passwordHasSpaces: config.password.includes(' '),
+                passwordStartsWithQuote:
+                    config.password.startsWith('"') ||
+                    config.password.startsWith("'"),
+                passwordEndsWithQuote:
+                    config.password.endsWith('"') ||
+                    config.password.endsWith("'"),
+            });
 
             if (!config.password) {
                 reject(
@@ -66,17 +85,122 @@ export class EmailProcessor {
                 return;
             }
 
+            // Warn about potential password issues
+            if (config.password.trim() !== config.password) {
+                console.warn(
+                    '[EmailProcessor] WARNING: Password has leading/trailing spaces. This may cause authentication to fail.'
+                );
+            }
+            if (
+                config.password.startsWith('"') ||
+                config.password.startsWith("'") ||
+                config.password.endsWith('"') ||
+                config.password.endsWith("'")
+            ) {
+                console.warn(
+                    '[EmailProcessor] WARNING: Password appears to have quotes. Remove quotes from .env.local file.'
+                );
+            }
+
+            // Set up connection timeout
+            const connectionTimeout = setTimeout(() => {
+                if (this.imap) {
+                    this.imap.end();
+                    this.imap = null;
+                }
+                reject(
+                    new Error(
+                        'Connection timeout: Unable to connect to IMAP server. ' +
+                            'Please check: 1) IMAP is enabled on your email account, ' +
+                            '2) You are using an app password (not regular password) for Outlook/Office 365, ' +
+                            '3) Network/firewall is not blocking the connection.'
+                    )
+                );
+            }, 30000);
+
             this.imap = new Imap(config);
 
             this.imap.once('ready', () => {
+                clearTimeout(connectionTimeout);
                 console.log('[EmailProcessor] Connected to IMAP server');
                 resolve();
             });
 
-            this.imap.once('error', (err: Error) => {
-                console.error('[EmailProcessor] IMAP error:', err);
-                reject(err);
-            });
+            this.imap.once(
+                'error',
+                (
+                    err: Error & {
+                        source?: string;
+                        textCode?: string;
+                        code?: string;
+                    }
+                ) => {
+                    clearTimeout(connectionTimeout);
+                    console.error('[EmailProcessor] IMAP error:', {
+                        message: err.message,
+                        source: err.source,
+                        textCode: err.textCode,
+                        code: err.code,
+                        stack: err.stack,
+                    });
+
+                    // Provide more helpful error messages
+                    let errorMessage = err.message;
+                    const errorText = err.message.toLowerCase();
+                    const errorCode = err.textCode || err.code || '';
+                    const errorCodeLower = errorCode.toLowerCase();
+
+                    // Comprehensive check for authentication/credential errors
+                    // Check error message, error code, and source
+                    const isAuthError =
+                        // Error message patterns
+                        errorText.includes('login failed') ||
+                        errorText.includes('authentication') ||
+                        errorText.includes('authenticate') ||
+                        errorText.includes('invalid credentials') ||
+                        errorText.includes('wrong password') ||
+                        errorText.includes('incorrect password') ||
+                        errorText.includes('bad credentials') ||
+                        errorText.includes('unauthorized') ||
+                        // Error code patterns (IMAP standard codes)
+                        errorCodeLower.includes('authenticationfailed') ||
+                        errorCodeLower.includes('authorizationfailed') ||
+                        errorCodeLower === 'no' ||
+                        // Source indicates authentication
+                        err.source === 'authentication' ||
+                        err.source === 'auth';
+
+                    if (isAuthError) {
+                        errorMessage = `Authentication failed. Invalid email or password. (${
+                            errorCode || err.message
+                        })`;
+                    } else if (
+                        errorText.includes('timeout') ||
+                        errorText.includes('timed out')
+                    ) {
+                        errorMessage = `Connection timeout. Unable to connect to ${config.host}:${config.port}`;
+                    } else if (
+                        errorCode === 'EAI_AGAIN' ||
+                        errorCode === 'ENOTFOUND' ||
+                        errorText.includes('getaddrinfo') ||
+                        errorText.includes('eai_again') ||
+                        errorText.includes('enotfound')
+                    ) {
+                        errorMessage = `DNS lookup failed. Cannot resolve hostname: ${config.host}`;
+                    } else if (
+                        errorText.includes('econnrefused') ||
+                        errorText.includes('econnreset')
+                    ) {
+                        errorMessage = `Connection refused. Cannot connect to ${config.host}:${config.port}`;
+                    } else {
+                        errorMessage = `IMAP error: ${err.message}${
+                            errorCode ? ` (${errorCode})` : ''
+                        }`;
+                    }
+
+                    reject(new Error(errorMessage));
+                }
+            );
 
             this.imap.connect();
         });
@@ -243,24 +367,34 @@ export class EmailProcessor {
      * Process email directly (for re-processing approved quarantined emails)
      * Bypasses IMAP and quarantine checks
      */
-    async processEmailDirectly(email: ParsedMail | {
-        from: { text: string; value: Array<{ address: string }> };
-        subject: string;
-        text: string;
-        html: string | null;
-        attachments: unknown[];
-        date: Date;
-        messageId: string;
-        headers: Record<string, unknown>;
-    }): Promise<boolean> {
+    async processEmailDirectly(
+        email:
+            | ParsedMail
+            | {
+                  from: { text: string; value: Array<{ address: string }> };
+                  subject: string;
+                  text: string;
+                  html: string | null;
+                  attachments: unknown[];
+                  date: Date;
+                  messageId: string;
+                  headers: Record<string, unknown>;
+              }
+    ): Promise<boolean> {
         try {
             // Extract data from email
             const extractedData = this.extractDataFromEmail(email);
-            
+
             // Create assessment from email data
-            return await this.createAssessmentFromEmailData(extractedData, email);
+            return await this.createAssessmentFromEmailData(
+                extractedData,
+                email
+            );
         } catch (error) {
-            console.error('[EmailProcessor] Error processing email directly:', error);
+            console.error(
+                '[EmailProcessor] Error processing email directly:',
+                error
+            );
             return false;
         }
     }
@@ -270,31 +404,45 @@ export class EmailProcessor {
      */
     private async createAssessmentFromEmailData(
         extractedData: ExtractedData,
-        email: ParsedMail | {
-            from: { text: string; value: Array<{ address: string }> };
-            subject: string;
-            text: string;
-            html: string | null;
-            attachments: unknown[];
-            date: Date;
-            messageId: string;
-            headers: Record<string, unknown>;
-        }
+        email:
+            | ParsedMail
+            | {
+                  from: { text: string; value: Array<{ address: string }> };
+                  subject: string;
+                  text: string;
+                  html: string | null;
+                  attachments: unknown[];
+                  date: Date;
+                  messageId: string;
+                  headers: Record<string, unknown>;
+              }
     ): Promise<boolean> {
         try {
             const assessmentData: AssessmentInsert = {
-                your_name: extractedData.insuredName || email.from?.text || 'Unknown',
-                your_email: email.from?.value?.[0]?.address || 'unknown@example.com',
+                your_name:
+                    extractedData.insuredName || email.from?.text || 'Unknown',
+                your_email:
+                    email.from?.value?.[0]?.address || 'unknown@example.com',
                 your_phone: '',
-                company_name: extractedData.repairerInfo?.name || 'Unknown Company',
-                year: extractedData.vehicleInfo?.year ? parseInt(extractedData.vehicleInfo.year) : null,
+                company_name:
+                    extractedData.repairerInfo?.name || 'Unknown Company',
+                year: extractedData.vehicleInfo?.year
+                    ? parseInt(extractedData.vehicleInfo.year)
+                    : null,
                 make: extractedData.vehicleInfo?.make || '',
                 model: extractedData.vehicleInfo?.model || '',
                 registration: extractedData.vehicleInfo?.registration || null,
-                incident_description: extractedData.incidentDescription || email.text?.substring(0, 1000) || '',
+                incident_description:
+                    extractedData.incidentDescription ||
+                    email.text?.substring(0, 1000) ||
+                    '',
                 assessment_type: 'Desktop Assessment',
                 status: 'pending',
-                internal_notes: `Imported from email. Source: ${email.from?.text || 'unknown'}. Subject: ${email.subject || 'no subject'}. Claim: ${extractedData.claimReference || 'N/A'}`,
+                internal_notes: `Imported from email. Source: ${
+                    email.from?.text || 'unknown'
+                }. Subject: ${email.subject || 'no subject'}. Claim: ${
+                    extractedData.claimReference || 'N/A'
+                }`,
                 authority_confirmed: false,
                 privacy_consent: false,
             };
@@ -316,11 +464,16 @@ export class EmailProcessor {
                 .single();
 
             if (error || !assessment) {
-                console.error('[EmailProcessor] Failed to create assessment:', error);
+                console.error(
+                    '[EmailProcessor] Failed to create assessment:',
+                    error
+                );
                 return false;
             }
 
-            console.log(`[EmailProcessor] Created assessment ${assessment.id} from email`);
+            console.log(
+                `[EmailProcessor] Created assessment ${assessment.id} from email`
+            );
             return true;
         } catch (error) {
             console.error('[EmailProcessor] Error creating assessment:', error);
@@ -337,24 +490,28 @@ export class EmailProcessor {
         uid: number
     ): Promise<boolean> {
         try {
-            const senderEmail = email.from?.text || email.from?.value?.[0]?.address || '';
-            
+            const senderEmail =
+                email.from?.text || email.from?.value?.[0]?.address || '';
+
             // REQ-4: Check whitelist/blacklist
             const filterResult = await checkEmailFilter(senderEmail);
-            
+
             if (filterResult.isBlacklisted) {
                 console.log(
                     `[EmailProcessor] Email ${uid} from ${senderEmail} is blacklisted: ${filterResult.reason}`
                 );
-                
+
                 // REQ-5: Send auto-reply for rejected emails
-                await this.sendAutoRejectReply(senderEmail, filterResult.reason || 'Email address is blacklisted');
-                
+                await this.sendAutoRejectReply(
+                    senderEmail,
+                    filterResult.reason || 'Email address is blacklisted'
+                );
+
                 // Mark email as read (don't process)
                 await this.markEmailAsRead(uid);
                 return false;
             }
-            
+
             // If whitelisted, skip spam check
             let spamCheckResult = null;
             if (!filterResult.isWhitelisted) {
@@ -365,44 +522,49 @@ export class EmailProcessor {
                     description: emailText.substring(0, 1000), // First 1000 chars
                     photoCount: email.attachments?.length || 0,
                 });
-                
+
                 // REQ-6: Quarantine suspicious emails
-                if (spamCheckResult.action === 'manual_review' || spamCheckResult.spamScore >= 50) {
+                if (
+                    spamCheckResult.action === 'manual_review' ||
+                    spamCheckResult.spamScore >= 50
+                ) {
                     console.log(
                         `[EmailProcessor] Email ${uid} from ${senderEmail} is suspicious (score: ${spamCheckResult.spamScore}), quarantining`
                     );
-                    
+
                     await quarantineEmail({
                         email,
                         emailUid: uid,
                         spamScore: spamCheckResult.spamScore,
                         spamFlags: spamCheckResult.flags,
-                        reason: `Spam score: ${spamCheckResult.spamScore}, Flags: ${spamCheckResult.flags.join(', ')}`,
+                        reason: `Spam score: ${
+                            spamCheckResult.spamScore
+                        }, Flags: ${spamCheckResult.flags.join(', ')}`,
                     });
-                    
+
                     // Mark email as read (quarantined)
                     await this.markEmailAsRead(uid);
                     return false;
                 }
-                
+
                 // Auto-reject if spam score is too high
                 if (spamCheckResult.action === 'auto_reject') {
                     console.log(
                         `[EmailProcessor] Email ${uid} from ${senderEmail} is spam (score: ${spamCheckResult.spamScore}), auto-rejecting`
                     );
-                    
+
                     // REQ-5: Send auto-reply for rejected emails
                     await this.sendAutoRejectReply(
                         senderEmail,
                         'Your email was automatically rejected due to spam detection. Please contact us directly if you believe this is an error.'
                     );
-                    
+
                     // Mark email as read (rejected)
                     await this.markEmailAsRead(uid);
                     return false;
                 }
             }
-            
+
             // Extract data from email body
             const extractedData = this.extractDataFromEmail(email);
 
@@ -451,11 +613,14 @@ export class EmailProcessor {
             throw err;
         }
     }
-    
+
     /**
      * Send auto-reply for rejected emails (REQ-5)
      */
-    private async sendAutoRejectReply(toEmail: string, reason: string): Promise<void> {
+    private async sendAutoRejectReply(
+        toEmail: string,
+        reason: string
+    ): Promise<void> {
         try {
             await EmailService.sendEmail({
                 to: toEmail,
@@ -496,9 +661,14 @@ export class EmailProcessor {
                     </html>
                 `,
             });
-            console.log(`[EmailProcessor] Auto-reject reply sent to ${toEmail}`);
+            console.log(
+                `[EmailProcessor] Auto-reject reply sent to ${toEmail}`
+            );
         } catch (error) {
-            console.error(`[EmailProcessor] Failed to send auto-reject reply to ${toEmail}:`, error);
+            console.error(
+                `[EmailProcessor] Failed to send auto-reject reply to ${toEmail}:`,
+                error
+            );
             // Don't throw - email sending failure shouldn't break processing
         }
     }
@@ -506,16 +676,20 @@ export class EmailProcessor {
     /**
      * Extract data from email body using pattern matching
      */
-    private extractDataFromEmail(email: ParsedMail | {
-        from: { text: string; value: Array<{ address: string }> };
-        subject: string;
-        text: string;
-        html: string | null;
-        attachments: unknown[];
-        date: Date;
-        messageId: string;
-        headers: Record<string, unknown>;
-    }): ExtractedData {
+    private extractDataFromEmail(
+        email:
+            | ParsedMail
+            | {
+                  from: { text: string; value: Array<{ address: string }> };
+                  subject: string;
+                  text: string;
+                  html: string | null;
+                  attachments: unknown[];
+                  date: Date;
+                  messageId: string;
+                  headers: Record<string, unknown>;
+              }
+    ): ExtractedData {
         const data: ExtractedData = {};
         const text = email.text || email.html || '';
 

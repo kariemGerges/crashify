@@ -21,6 +21,7 @@ import {
     MessageSquare,
     X,
     Receipt,
+    RefreshCw,
 } from 'lucide-react';
 import { AddUserModal } from '@/app/components/Admin/AddUserModal';
 import { api } from '@/app/actions/getUser';
@@ -38,13 +39,14 @@ import { EmailFiltersTab } from '../Admin/EmailFiltersTab';
 import { NotificationBell } from '../Admin/NotificationBell';
 import { useToast } from '../Toast';
 import { ConfirmModal } from '../Admin/ConfirmModal';
+import { format } from 'date-fns';
 
 export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     user,
     onLogout,
 }) => {
     const toast = useToast();
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState('assessments');
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     const [users, setUsers] = useState<User[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
@@ -103,6 +105,14 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     const [loadingTokens, setLoadingTokens] = useState(false);
     const [tokensError, setTokensError] = useState('');
 
+    // Email processing state
+    const [processingEmails, setProcessingEmails] = useState(false);
+    const [emailProcessResult, setEmailProcessResult] = useState<{
+        processed: number;
+        created: number;
+        errors: Array<{ emailId: string; error: string }>;
+    } | null>(null);
+
     // Get the color of the role badge
     const getRoleBadgeColor = (role: Role) => {
         switch (role) {
@@ -126,22 +136,9 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     // The menu items for the admin dashboard
     const menuItems = [
         {
-            id: 'overview',
+            id: 'assessments',
             icon: BarChart3,
-            label: 'Overview',
-            roles: [
-                'super_admin',
-                'admin',
-                'manager',
-                'reviewer',
-                'assessor',
-                'read_only',
-            ],
-        },
-        {
-            id: 'claims',
-            icon: FileText,
-            label: 'Claims',
+            label: 'Assessments',
             roles: [
                 'super_admin',
                 'admin',
@@ -158,9 +155,22 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             roles: ['super_admin', 'admin', 'manager', 'reviewer', 'read_only'],
         },
         {
+            id: 'claims',
+            icon: FileText,
+            label: 'Claims',
+            roles: [
+                'super_admin',
+                'admin',
+                'manager',
+                'reviewer',
+                'assessor',
+                'read_only',
+            ],
+        },
+        {
             id: 'supplementary',
             icon: FileText,
-            label: 'Supplementary Requests',
+            label: 'Supplementary', // Supplementary Requests
             roles: ['super_admin', 'admin', 'manager', 'reviewer'],
         },
         {
@@ -382,12 +392,71 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         toast.showSuccess('Link copied to clipboard!');
     };
 
+    // Process emails manually
+    const handleProcessEmails = async () => {
+        setProcessingEmails(true);
+        setEmailProcessResult(null);
+
+        try {
+            const response = await fetch('/api/email/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error || result.details || 'Failed to process emails'
+                );
+            }
+
+            setEmailProcessResult({
+                processed: result.processed || 0,
+                created: result.created || 0,
+                errors: Array.isArray(result.errors)
+                    ? result.errors.map(
+                          (err: string | { emailId: string; error: string }) =>
+                              typeof err === 'string'
+                                  ? { emailId: 'unknown', error: err }
+                                  : err
+                      )
+                    : [],
+            });
+
+            toast.showSuccess(
+                `Processed ${result.processed || 0} emails, created ${
+                    result.created || 0
+                } assessments`
+            );
+
+            // Refresh stats if on assessments tab
+            if (activeTab === 'assessments') {
+                loadStats();
+            }
+        } catch (err: unknown) {
+            const errorMessage =
+                err instanceof Error ? err.message : 'Failed to process emails';
+            toast.showError(errorMessage);
+            setEmailProcessResult({
+                processed: 0,
+                created: 0,
+                errors: [{ emailId: 'system', error: errorMessage }],
+            });
+        } finally {
+            setProcessingEmails(false);
+        }
+    };
+
     // Use effect to load the users when the users tab is active
     useEffect(() => {
         if (activeTab === 'users' && ['admin', 'manager'].includes(user.role)) {
             loadUsers();
         }
-        if (activeTab === 'overview') {
+        if (activeTab === 'assessments' || activeTab === 'complaints') {
             loadStats();
         }
         if (
@@ -504,15 +573,21 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                             </p>
                         </div>
 
-                        {/* Stats Grid */}
-                        {activeTab === 'overview' &&
-                            (loadingStats ? (
-                                <div className="flex items-center justify-center py-12">
-                                    <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
-                                </div>
-                            ) : (
-                                <EnhancedStatsOverview />
-                            ))}
+                        {/* Assessments Tab - All sections on one page */}
+                        {activeTab === 'assessments' && (
+                            <EnhancedStatsOverview
+                                showAllSections={true}
+                                mainTab="assessments"
+                            />
+                        )}
+
+                        {/* Complaints Tab - All sections on one page */}
+                        {activeTab === 'complaints' && (
+                            <EnhancedStatsOverview
+                                showAllSections={true}
+                                mainTab="complaints"
+                            />
+                        )}
 
                         {/* Claims Tab */}
                         {activeTab === 'claims' && <ClaimsTab />}
@@ -584,9 +659,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                                                 <Clock className="w-4 h-4" />
                                                                 <span>
                                                                     Expires:{' '}
-                                                                    {new Date(
-                                                                        generatedToken.expiresAt
-                                                                    ).toLocaleString()}
+                                                                    {format(
+                                                                        new Date(
+                                                                            generatedToken.expiresAt
+                                                                        ),
+                                                                        'PPpp'
+                                                                    )}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -972,9 +1050,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                                                             <Clock className="w-4 h-4" />
                                                                             <span>
                                                                                 Expires:{' '}
-                                                                                {new Date(
-                                                                                    token.expiresAt
-                                                                                ).toLocaleString()}
+                                                                                {format(
+                                                                                    new Date(
+                                                                                        token.expiresAt
+                                                                                    ),
+                                                                                    'PPpp'
+                                                                                )}
                                                                             </span>
                                                                         </div>
                                                                         <span
@@ -991,9 +1072,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                                                         {token.usedAt && (
                                                                             <span className="text-gray-500 text-xs">
                                                                                 Used:{' '}
-                                                                                {new Date(
-                                                                                    token.usedAt
-                                                                                ).toLocaleString()}
+                                                                                {format(
+                                                                                    new Date(
+                                                                                        token.usedAt
+                                                                                    ),
+                                                                                    'PPpp'
+                                                                                )}
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -1070,9 +1154,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                                                     <p className="text-gray-500 text-xs">
                                                                         Last
                                                                         login:{' '}
-                                                                        {new Date(
-                                                                            u.lastLogin
-                                                                        ).toLocaleDateString()}
+                                                                        {format(
+                                                                            new Date(
+                                                                                u.lastLogin
+                                                                            ),
+                                                                            'PP'
+                                                                        )}
                                                                     </p>
                                                                 )}
                                                             </div>
@@ -1132,71 +1219,247 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
 
                         {/* Settings Tab */}
                         {activeTab === 'settings' && user.role === 'admin' && (
-                            <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
-                                <h3 className="text-xl font-bold text-white mb-4">
-                                    System Settings
-                                </h3>
-                                <div className="space-y-4">
-                                    <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-white font-medium">
-                                                    Two-Factor Authentication
-                                                </p>
-                                                <p className="text-gray-400 text-sm">
-                                                    Require 2FA for all users
-                                                </p>
-                                            </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    className="sr-only peer"
-                                                    defaultChecked
-                                                />
-                                                <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-amber-500 peer-checked:to-red-600"></div>
-                                            </label>
+                            <div className="space-y-6">
+                                {/* Email Processing Section */}
+                                <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-red-600 rounded-lg flex items-center justify-center">
+                                            <Mail className="w-5 h-5 text-white" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-white">
+                                                Email Processing
+                                            </h3>
+                                            <p className="text-gray-400 text-sm">
+                                                Manually trigger email
+                                                processing from
+                                                info@crashify.com.au
+                                            </p>
                                         </div>
                                     </div>
 
-                                    <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-white font-medium">
-                                                    Session Timeout
-                                                </p>
-                                                <p className="text-gray-400 text-sm">
-                                                    Auto logout after inactivity
-                                                </p>
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div>
+                                                    <p className="text-white font-medium">
+                                                        Process Unread Emails
+                                                    </p>
+                                                    <p className="text-gray-400 text-sm">
+                                                        Check for new emails and
+                                                        create assessments
+                                                        automatically
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={
+                                                        handleProcessEmails
+                                                    }
+                                                    disabled={processingEmails}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-red-600 text-white rounded-lg hover:from-amber-600 hover:to-red-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {processingEmails ? (
+                                                        <>
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                            Processing...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <RefreshCw className="w-4 h-4" />
+                                                            Process Emails
+                                                        </>
+                                                    )}
+                                                </button>
                                             </div>
-                                            <select className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
-                                                <option>30 minutes</option>
-                                                <option>1 hour</option>
-                                                <option selected>
-                                                    8 hours
-                                                </option>
-                                                <option>24 hours</option>
-                                            </select>
+
+                                            {emailProcessResult && (
+                                                <div
+                                                    className={`mt-4 p-4 rounded-lg border ${
+                                                        emailProcessResult
+                                                            .errors.length > 0
+                                                            ? 'bg-red-500/10 border-red-500/50'
+                                                            : 'bg-green-500/10 border-green-500/50'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-start gap-3">
+                                                        {emailProcessResult
+                                                            .errors.length >
+                                                        0 ? (
+                                                            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                                                        ) : (
+                                                            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                                                        )}
+                                                        <div className="flex-1">
+                                                            <p
+                                                                className={`font-medium mb-2 ${
+                                                                    emailProcessResult
+                                                                        .errors
+                                                                        .length >
+                                                                    0
+                                                                        ? 'text-red-400'
+                                                                        : 'text-green-400'
+                                                                }`}
+                                                            >
+                                                                Processing
+                                                                Complete
+                                                            </p>
+                                                            <div className="space-y-1 text-sm">
+                                                                <p className="text-gray-300">
+                                                                    <span className="font-medium">
+                                                                        Emails
+                                                                        Processed:
+                                                                    </span>{' '}
+                                                                    {
+                                                                        emailProcessResult.processed
+                                                                    }
+                                                                </p>
+                                                                <p className="text-gray-300">
+                                                                    <span className="font-medium">
+                                                                        Assessments
+                                                                        Created:
+                                                                    </span>{' '}
+                                                                    {
+                                                                        emailProcessResult.created
+                                                                    }
+                                                                </p>
+                                                                {emailProcessResult
+                                                                    .errors
+                                                                    .length >
+                                                                    0 && (
+                                                                    <div className="mt-2">
+                                                                        <p className="text-red-400 font-medium mb-1">
+                                                                            Errors:
+                                                                        </p>
+                                                                        <ul className="list-disc list-inside text-red-300 space-y-1">
+                                                                            {emailProcessResult.errors.map(
+                                                                                (
+                                                                                    errorItem,
+                                                                                    idx
+                                                                                ) => (
+                                                                                    <li
+                                                                                        key={
+                                                                                            idx
+                                                                                        }
+                                                                                        className="text-xs"
+                                                                                    >
+                                                                                        {errorItem.emailId &&
+                                                                                            errorItem.emailId !==
+                                                                                                'system' && (
+                                                                                                <span className="font-medium">
+                                                                                                    {
+                                                                                                        errorItem.emailId
+                                                                                                    }
+
+                                                                                                    :{' '}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        {
+                                                                                            errorItem.error
+                                                                                        }
+                                                                                    </li>
+                                                                                )
+                                                                            )}
+                                                                        </ul>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() =>
+                                                                setEmailProcessResult(
+                                                                    null
+                                                                )
+                                                            }
+                                                            className="text-gray-400 hover:text-white transition-colors"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
+                                </div>
 
-                                    <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-white font-medium">
-                                                    Audit Logging
-                                                </p>
-                                                <p className="text-gray-400 text-sm">
-                                                    Track all admin actions
-                                                </p>
+                                {/* System Settings Section */}
+                                <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                                    <h3 className="text-xl font-bold text-white mb-4">
+                                        System Settings
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-white font-medium">
+                                                        Two-Factor
+                                                        Authentication
+                                                    </p>
+                                                    <p className="text-gray-400 text-sm">
+                                                        Require 2FA for all
+                                                        users
+                                                    </p>
+                                                </div>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only peer"
+                                                        defaultChecked
+                                                    />
+                                                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-amber-500 peer-checked:to-red-600"></div>
+                                                </label>
                                             </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    className="sr-only peer"
-                                                    defaultChecked
-                                                />
-                                                <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-amber-500 peer-checked:to-red-600"></div>
-                                            </label>
+                                        </div>
+
+                                        <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-white font-medium">
+                                                        Session Timeout
+                                                    </p>
+                                                    <p className="text-gray-400 text-sm">
+                                                        Auto logout after
+                                                        inactivity
+                                                    </p>
+                                                </div>
+                                                <select
+                                                    defaultValue="8 hours"
+                                                    className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                                                >
+                                                    <option value="30 minutes">
+                                                        30 minutes
+                                                    </option>
+                                                    <option value="1 hour">
+                                                        1 hour
+                                                    </option>
+                                                    <option value="8 hours">
+                                                        8 hours
+                                                    </option>
+                                                    <option value="24 hours">
+                                                        24 hours
+                                                    </option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-white font-medium">
+                                                        Audit Logging
+                                                    </p>
+                                                    <p className="text-gray-400 text-sm">
+                                                        Track all admin actions
+                                                    </p>
+                                                </div>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only peer"
+                                                        defaultChecked
+                                                    />
+                                                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-amber-500 peer-checked:to-red-600"></div>
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

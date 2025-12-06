@@ -198,7 +198,25 @@ export class TokenRepository {
                 '[TokenRepository] Error getting active tokens:',
                 error
             );
-            throw new Error('Failed to get active tokens');
+            
+            // Provide more detailed error information
+            if (error instanceof Prisma.PrismaClientKnownRequestError) {
+                console.error('[TokenRepository] Prisma error code:', error.code);
+                console.error('[TokenRepository] Prisma error message:', error.message);
+                throw new Error(
+                    `Database error (${error.code}): ${error.message}`
+                );
+            }
+            
+            if (error instanceof Prisma.PrismaClientInitializationError) {
+                console.error('[TokenRepository] Prisma initialization error:', error.message);
+                throw new Error(
+                    `Database connection failed: ${error.message}. Please check your DATABASE_URL environment variable.`
+                );
+            }
+            
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            throw new Error(`Failed to get active tokens: ${errorMessage}`);
         }
     }
 }
