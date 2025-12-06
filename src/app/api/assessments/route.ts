@@ -273,8 +273,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Invalidate cache
-        revalidateTag('assessments-list');
-        revalidateTag('stats');
+        await revalidateTag('assessments-list', 'default');
+        await revalidateTag('stats', 'default');
 
         // Return success with assessment ID for file uploads
         return NextResponse.json(

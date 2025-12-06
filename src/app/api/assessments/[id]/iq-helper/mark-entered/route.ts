@@ -129,8 +129,8 @@ export async function POST(
         }
 
         // Invalidate cache
-        revalidateTag('assessment');
-        revalidateTag('assessments-list');
+        await revalidateTag('assessment', 'default');
+        await revalidateTag('assessments-list', 'default');
 
         return NextResponse.json({
             success: true,

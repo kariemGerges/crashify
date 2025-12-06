@@ -155,8 +155,8 @@ export async function PATCH(
         }
 
         // Invalidate cache
-        revalidateTag('assessment');
-        revalidateTag('assessments-list');
+        await revalidateTag('assessment', 'default');
+        await revalidateTag('assessments-list', 'default');
 
         return NextResponse.json({ success: true, data });
     } catch (error) {
@@ -199,8 +199,8 @@ export async function DELETE(
         }
 
         // Invalidate cache
-        revalidateTag('assessments-list');
-        revalidateTag('stats');
+        await revalidateTag('assessments-list', 'default');
+        await revalidateTag('stats', 'default');
 
         return NextResponse.json({ success: true });
     } catch (error) {

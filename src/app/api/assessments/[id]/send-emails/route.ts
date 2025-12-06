@@ -364,8 +364,8 @@ export async function POST(
         }
 
         // Invalidate cache
-        revalidateTag('assessment');
-        revalidateTag('assessments-list');
+        await revalidateTag('assessment', 'default');
+        await revalidateTag('assessments-list', 'default');
 
         const allSuccessful = results.every(r => r.success);
         const hasErrors = results.some(r => !r.success);
