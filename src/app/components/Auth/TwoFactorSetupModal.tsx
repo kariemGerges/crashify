@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, Download, Mail } from 'lucide-react';
 import Image from 'next/image';
+import { useToast } from '../Toast';
 
 
 export interface TwoFactorSetupData {
@@ -20,6 +21,7 @@ export const TwoFactorSetupModal: React.FC<{
     const [copied, setCopied] = useState(false);
     const [sendingEmail, setSendingEmail] = useState(false);
     const [emailSent, setEmailSent] = useState(false);
+    const { showError } = useToast();
 
     const handleCopySecret = async () => {
         try {
@@ -64,7 +66,7 @@ export const TwoFactorSetupModal: React.FC<{
             onEmailSent?.();
         } catch (err) {
             console.error('Error sending email:', err);
-            alert('Failed to send email. Please try again.');
+            showError('Failed to send email. Please try again.');
         } finally {
             setSendingEmail(false);
         }

@@ -46,13 +46,55 @@ export class EmailProcessor {
     private supabase = createServerClient();
 
     /**
+     * Clean and prepare password for IMAP authentication
+     * Handles trimming, URL decoding, and quote removal
+     */
+    private cleanPassword(rawPassword: string): string {
+        if (!rawPassword) return '';
+
+        let cleaned = rawPassword;
+
+        // Remove surrounding quotes if present
+        if (
+            (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+            (cleaned.startsWith("'") && cleaned.endsWith("'"))
+        ) {
+            cleaned = cleaned.slice(1, -1);
+        }
+
+        // Trim whitespace
+        cleaned = cleaned.trim();
+
+        // Try URL decoding (in case password was URL-encoded in env var)
+        try {
+            const urlDecoded = decodeURIComponent(cleaned);
+            // Only use decoded version if it's different and doesn't contain invalid sequences
+            if (urlDecoded !== cleaned && !urlDecoded.includes('%')) {
+                cleaned = urlDecoded;
+            }
+        } catch {
+            // If URL decoding fails, use original
+        }
+
+        return cleaned;
+    }
+
+    /**
      * Connect to IMAP server
      */
     private async connect(): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Get and clean password
+            const rawPassword = process.env.IMAP_PASSWORD || '';
+            const cleanedPassword = this.cleanPassword(rawPassword);
+
+            // Get and clean username
+            const rawUser = process.env.IMAP_USER || 'info@crashify.com.au';
+            const cleanedUser = rawUser.trim();
+
             const config = {
-                user: process.env.IMAP_USER || 'info@crashify.com.au',
-                password: process.env.IMAP_PASSWORD || '',
+                user: cleanedUser,
+                password: cleanedPassword,
                 // GoDaddy email hosting uses imap.secureserver.net
                 // For Outlook/Office 365, use imap.outlook.com
                 host: process.env.IMAP_HOST || 'imap.secureserver.net',
@@ -76,6 +118,7 @@ export class EmailProcessor {
                 passwordEndsWithQuote:
                     config.password.endsWith('"') ||
                     config.password.endsWith("'"),
+                passwordWasCleaned: rawPassword !== cleanedPassword,
             });
 
             if (!config.password) {
@@ -86,19 +129,19 @@ export class EmailProcessor {
             }
 
             // Warn about potential password issues
-            if (config.password.trim() !== config.password) {
+            if (rawPassword.trim() !== rawPassword) {
                 console.warn(
-                    '[EmailProcessor] WARNING: Password has leading/trailing spaces. This may cause authentication to fail.'
+                    '[EmailProcessor] WARNING: Password had leading/trailing spaces. They have been removed.'
                 );
             }
             if (
-                config.password.startsWith('"') ||
-                config.password.startsWith("'") ||
-                config.password.endsWith('"') ||
-                config.password.endsWith("'")
+                rawPassword.startsWith('"') ||
+                rawPassword.startsWith("'") ||
+                rawPassword.endsWith('"') ||
+                rawPassword.endsWith("'")
             ) {
                 console.warn(
-                    '[EmailProcessor] WARNING: Password appears to have quotes. Remove quotes from .env.local file.'
+                    '[EmailProcessor] WARNING: Password had quotes. They have been removed.'
                 );
             }
 
@@ -171,9 +214,21 @@ export class EmailProcessor {
                         err.source === 'auth';
 
                     if (isAuthError) {
+                        // Provide detailed troubleshooting for authentication failures
+                        const troubleshootingSteps = [
+                            '1. Verify your password is correct by logging into webmail',
+                            '2. For GoDaddy: Ensure IMAP is enabled in your email account settings',
+                            '3. For GoDaddy: Try using an app password if 2FA is enabled',
+                            '4. Check that IMAP_PASSWORD in .env.local has no quotes or extra spaces',
+                            '5. For special characters in password: Ensure they are properly escaped or use an app password',
+                            '6. Verify the email address (IMAP_USER) is correct and matches the account',
+                        ];
+
                         errorMessage = `Authentication failed. Invalid email or password. (${
                             errorCode || err.message
-                        })`;
+                        })\n\nTroubleshooting:\n${troubleshootingSteps.join(
+                            '\n'
+                        )}\n\nFor GoDaddy: Check email settings at https://email.secureserver.net\nFor app passwords: https://account.microsoft.com/security (Microsoft 365)`;
                     } else if (
                         errorText.includes('timeout') ||
                         errorText.includes('timed out')
@@ -371,15 +426,15 @@ export class EmailProcessor {
         email:
             | ParsedMail
             | {
-                  from: { text: string; value: Array<{ address: string }> };
-                  subject: string;
-                  text: string;
-                  html: string | null;
-                  attachments: unknown[];
-                  date: Date;
-                  messageId: string;
-                  headers: Record<string, unknown>;
-              }
+                    from: { text: string; value: Array<{ address: string }> };
+                    subject: string;
+                    text: string;
+                    html: string | null;
+                    attachments: unknown[];
+                    date: Date;
+                    messageId: string;
+                    headers: Record<string, unknown>;
+            }
     ): Promise<boolean> {
         try {
             // Extract data from email

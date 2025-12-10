@@ -241,6 +241,33 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Log assessment creation in audit log
+        try {
+            const auditLogInsert: Database['public']['Tables']['audit_logs']['Insert'] = {
+                action: 'assessment_created',
+                resource_type: 'assessment',
+                resource_id: assessment.id,
+                details: {
+                    assessmentId: assessment.id,
+                    companyName: formData.companyName,
+                    assessmentType: formData.assessmentType,
+                    email: formData.yourEmail,
+                    spamScore: spamCheckResult?.spamScore || null,
+                    spamFlags: spamCheckResult?.flags || [],
+                },
+                ip_address: ipAddress || undefined,
+                user_agent: userAgent || undefined,
+                created_at: new Date().toISOString(),
+                success: true,
+            };
+            await (supabase.from('audit_logs') as unknown as {
+                insert: (values: Database['public']['Tables']['audit_logs']['Insert'][]) => Promise<unknown>;
+            }).insert([auditLogInsert]);
+        } catch (auditError) {
+            console.error('[ASSESSMENT] Failed to log assessment creation:', auditError);
+            // Don't fail the request if audit logging fails
+        }
+
         // REQ-115: Notify admins of new assessment
         // REQ-119: Notify client of submission received
         try {

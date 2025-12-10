@@ -16,6 +16,7 @@ import {
     UploadedFile,
 } from '@/server/lib/types/database.types';
 import Image from 'next/image';
+import { useToast, ToastProvider } from '@/app/components/Toast';
 
 
 
@@ -33,6 +34,7 @@ interface TokenData {
 const CrashifyFormContent: React.FC = () => {
     const searchParams = useSearchParams();
     const accessToken = searchParams.get('access');
+    const { showError, showWarning } = useToast();
 
     // Token validation state
     const [validationState, setValidationState] = useState<
@@ -222,15 +224,15 @@ const CrashifyFormContent: React.FC = () => {
 
             Array.from(files).forEach(file => {
                 if (uploadedFiles.length >= maxFiles) {
-                    alert(`Maximum ${maxFiles} files allowed`);
+                    showWarning(`Maximum ${maxFiles} files allowed`);
                     return;
                 }
                 if (!validTypes.includes(file.type)) {
-                    alert(`Invalid file type: ${file.name}`);
+                    showError(`Invalid file type: ${file.name}`);
                     return;
                 }
                 if (file.size > maxSize) {
-                    alert(`File too large: ${file.name}. Max 10MB`);
+                    showError(`File too large: ${file.name}. Max 10MB`);
                     return;
                 }
 
@@ -255,7 +257,7 @@ const CrashifyFormContent: React.FC = () => {
                 }
             });
         },
-        [uploadedFiles]
+        [uploadedFiles, showWarning, showError]
     );
 
     const removeFile = (id: string) =>
@@ -441,7 +443,7 @@ const CrashifyFormContent: React.FC = () => {
             setSubmitted(true);
         } catch (error) {
             console.error('Submission error:', error);
-            alert(
+            showError(
                 error instanceof Error
                     ? error.message
                     : 'Failed to submit assessment'
@@ -1936,15 +1938,17 @@ const CrashifyFormContent: React.FC = () => {
 
 const CrashifyForm: React.FC = () => {
     return (
-        <Suspense
-            fallback={
-                <div className="min-h-screen bg-black text-white flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-red-600" />
-                </div>
-            }
-        >
-            <CrashifyFormContent />
-        </Suspense>
+        <ToastProvider>
+            <Suspense
+                fallback={
+                    <div className="min-h-screen bg-black text-white flex items-center justify-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-red-600" />
+                    </div>
+                }
+            >
+                <CrashifyFormContent />
+            </Suspense>
+        </ToastProvider>
     );
 };
 

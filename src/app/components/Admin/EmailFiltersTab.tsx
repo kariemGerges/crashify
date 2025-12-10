@@ -26,7 +26,7 @@ export const EmailFiltersTab: React.FC = () => {
         reason: '',
         is_active: true,
     });
-    const { showError, showSuccess } = useToast();
+    const { showError, showSuccess, showConfirm } = useToast();
 
     useEffect(() => {
         loadFilters();
@@ -94,7 +94,8 @@ export const EmailFiltersTab: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this filter?')) return;
+        const confirmed = await showConfirm('Are you sure you want to delete this filter?');
+        if (!confirmed) return;
 
         const csrfResponse = await fetch('/api/csrf-token', {
             credentials: 'include',

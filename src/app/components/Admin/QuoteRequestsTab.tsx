@@ -11,6 +11,7 @@ import {
     ChevronRight,
     Eye,
 } from 'lucide-react';
+import { useToast } from '../Toast';
 
 interface QuoteRequest {
     id: string;
@@ -63,6 +64,7 @@ export const QuoteRequestsTab: React.FC = () => {
         totalPages: 0,
     });
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const { showSuccess, showError } = useToast();
 
     const loadQuoteRequests = async (page: number = 1, status?: string) => {
         setLoading(true);
@@ -132,9 +134,9 @@ export const QuoteRequestsTab: React.FC = () => {
             setShowApproveModal(false);
             setSelectedRequest(null);
             loadQuoteRequests(pagination.page, statusFilter);
-            alert('Quote request approved! Payment email sent to customer.');
+            showSuccess('Quote request approved! Payment email sent to customer.');
         } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : 'Failed to approve quote request');
+            showError(err instanceof Error ? err.message : 'Failed to approve quote request');
         } finally {
             setApproving(false);
         }
