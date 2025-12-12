@@ -95,8 +95,9 @@ export class EmailProcessor {
             const config = {
                 user: cleanedUser,
                 password: cleanedPassword,
-                // GoDaddy email hosting uses imap.secureserver.net
-                // For Outlook/Office 365, use imap.outlook.com
+                // GoDaddy legacy email hosting uses imap.secureserver.net
+                // For Microsoft 365 (GoDaddy Microsoft 365), use outlook.office365.com
+                // For Outlook.com personal accounts, use imap-mail.outlook.com
                 host: process.env.IMAP_HOST || 'imap.secureserver.net',
                 port: parseInt(process.env.IMAP_PORT || '993', 10),
                 tls: true,
@@ -214,21 +215,67 @@ export class EmailProcessor {
                         err.source === 'auth';
 
                     if (isAuthError) {
+                        // Check if using Microsoft 365
+                        const isMicrosoft365 = config.host.includes('office365.com') || config.host.includes('outlook.com');
+                        
                         // Provide detailed troubleshooting for authentication failures
                         const troubleshootingSteps = [
                             '1. Verify your password is correct by logging into webmail',
-                            '2. For GoDaddy: Ensure IMAP is enabled in your email account settings',
-                            '3. For GoDaddy: Try using an app password if 2FA is enabled',
-                            '4. Check that IMAP_PASSWORD in .env.local has no quotes or extra spaces',
-                            '5. For special characters in password: Ensure they are properly escaped or use an app password',
-                            '6. Verify the email address (IMAP_USER) is correct and matches the account',
+                            '2. Check that IMAP_PASSWORD in .env.local has no quotes or extra spaces',
+                            '3. Verify the email address (IMAP_USER) is correct and matches the account',
                         ];
+
+                        // Microsoft 365 specific steps
+                        if (isMicrosoft365) {
+                            troubleshootingSteps.push(
+                                '4. ⚠️  CRITICAL: If "Let devices and apps use POP" toggle is GRAYED OUT:',
+                                '   - This means IMAP/POP is disabled at the organization level',
+                                '   - You MUST enable IMAP in Microsoft 365 Admin Center first (see step 5)',
+                                '   - If you don\'t have admin access, contact GoDaddy support to enable IMAP',
+                                '5. ⚠️  CRITICAL: IMAP must be enabled in Microsoft 365 Admin Center:',
+                                '   - Go to https://admin.microsoft.com/ (or https://productivity.godaddy.com)',
+                                '   - Navigate to Users > Active users > Select your user (info@crashify.com.au)',
+                                '   - Click Mail tab > Manage email apps',
+                                '   - Ensure "IMAP" is CHECKED and click Save',
+                                '   - After enabling here, the Outlook.com toggle should become available',
+                                '6. ⚠️  IMPORTANT: Microsoft 365 requires OAuth2/Modern Auth',
+                                '   - The current IMAP library (imap v0.8.19) does NOT support OAuth2',
+                                '   - Basic auth is deprecated - app passwords may not work',
+                                '   - We may need to switch to Microsoft Graph API for proper OAuth2 support',
+                                '7. If MFA is enabled, try using an app password:',
+                                '   - Create app password at: https://account.microsoft.com/security',
+                                '   - Use the app password in IMAP_PASSWORD',
+                                '   - Note: This may still fail due to OAuth2 requirement',
+                                '8. Contact GoDaddy Support if:',
+                                '   - You cannot access Microsoft 365 Admin Center',
+                                '   - IMAP option is not available in Admin Center',
+                                '   - Your plan may not support IMAP/SMTP access',
+                                '   - Test connectivity: https://testconnectivity.microsoft.com/tests/O365Imap/input'
+                            );
+                        } else {
+                            troubleshootingSteps.push(
+                                '4. For GoDaddy: Ensure IMAP is enabled in your email account settings',
+                                '5. For GoDaddy: Try using an app password if 2FA is enabled',
+                                '6. For special characters in password: Ensure they are properly escaped or use an app password'
+                            );
+                        }
+
+                        // Check if using wrong IMAP host for Microsoft 365
+                        const currentHost = config.host;
+                        const isUsingGoDaddyLegacyHost = currentHost.includes('secureserver.net');
+                        const microsoft365Hint = isUsingGoDaddyLegacyHost
+                            ? '\n\n⚠️  IMPORTANT: If you are using GoDaddy Microsoft 365, you need to set IMAP_HOST=outlook.office365.com in your .env.local file (not imap.secureserver.net)'
+                            : '';
+
+                        const additionalInfo = isMicrosoft365
+                            ? '\n\n🔍 Microsoft 365 Specific Checks:\n- If toggle is grayed out: Enable IMAP in Admin Center first (see step 5 above)\n- Microsoft requires OAuth2 - the current IMAP library does NOT support OAuth2\n- We may need to switch to Microsoft Graph API for proper authentication\n- Test at: https://testconnectivity.microsoft.com/tests/O365Imap/input\n\n⚠️  LIKELY SOLUTION: Switch to Microsoft Graph API\n- The imap library doesn\'t support OAuth2 which Microsoft 365 requires\n- Microsoft Graph API is the recommended approach for Microsoft 365\n- This will require code changes but will work properly with OAuth2\n\n📚 Reference: https://support.microsoft.com/en-us/office/pop-imap-and-smtp-settings-for-outlook-com-d088b986-291d-42b8-9564-9c414e2aa040'
+                            : '';
 
                         errorMessage = `Authentication failed. Invalid email or password. (${
                             errorCode || err.message
                         })\n\nTroubleshooting:\n${troubleshootingSteps.join(
                             '\n'
-                        )}\n\nFor GoDaddy: Check email settings at https://email.secureserver.net\nFor app passwords: https://account.microsoft.com/security (Microsoft 365)`;
+                        )}${microsoft365Hint}${additionalInfo}\n\nFor GoDaddy Microsoft 365: Check settings at https://productivity.godaddy.com\nFor app passwords: https://account.microsoft.com/security (Microsoft 365)`;
                     } else if (
                         errorText.includes('timeout') ||
                         errorText.includes('timed out')

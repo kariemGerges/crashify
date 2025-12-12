@@ -42,11 +42,13 @@ export async function POST(request: NextRequest) {
 
         // Note: Email IMAP authentication uses IMAP_PASSWORD
         // The password should be set in your .env.local file as IMAP_PASSWORD
-        // For GoDaddy email: Use your regular email password (or app password if using Microsoft 365)
+        // For GoDaddy legacy email: Use your regular email password
+        // For GoDaddy Microsoft 365: Use outlook.office365.com and an app password (if MFA enabled)
         // For Outlook/Office 365: You MUST use an app-specific password, not your regular password
         // Default IMAP settings:
-        //   - GoDaddy: imap.secureserver.net:993
-        //   - Outlook: imap.outlook.com:993
+        //   - GoDaddy legacy: imap.secureserver.net:993
+        //   - Microsoft 365: outlook.office365.com:993
+        //   - Outlook.com: imap-mail.outlook.com:993
 
         console.log('[EMAIL_PROCESS] Starting email processing...');
 
@@ -155,10 +157,11 @@ export async function GET() {
             issues,
             warnings,
             recommendations: [
-                'For GoDaddy Workspace Email: Use your regular email password',
+                'For GoDaddy legacy email: Use your regular email password',
+                'For GoDaddy Microsoft 365: Set IMAP_HOST=outlook.office365.com and use an app password if MFA is enabled',
                 'For Microsoft 365: You need an app password from https://account.microsoft.com/security',
                 'Verify IMAP is enabled in your email account settings',
-                'Test your password by logging into webmail at https://email.secureserver.net',
+                'Test your password by logging into webmail at https://productivity.godaddy.com',
             ],
         },
     });

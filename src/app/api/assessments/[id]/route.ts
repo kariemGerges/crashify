@@ -126,6 +126,14 @@ export async function PATCH(
         delete updates.created_at;
         delete updates.deleted_at;
 
+        // Validate that we have fields to update
+        if (Object.keys(updates).length === 0) {
+            return NextResponse.json(
+                { error: 'No valid fields to update' },
+                { status: 400 }
+            );
+        }
+
         const updateData: AssessmentUpdate = updates;
         const { data, error } = await (supabase.from('assessments') as unknown as {
             update: (values: AssessmentUpdate) => {
@@ -144,11 +152,12 @@ export async function PATCH(
             .select()
             .single();
 
-        if (error) {
+        if (error || !data) {
+            console.error('Assessment update error:', error || 'No data returned');
             return NextResponse.json(
                 {
                     error: 'Failed to update assessment',
-                    details: error.message,
+                    details: error?.message || 'No data returned from update',
                 },
                 { status: 500 }
             );
@@ -162,7 +171,10 @@ export async function PATCH(
     } catch (error) {
         console.error('API Error:', error);
         return NextResponse.json(
-            { error: 'Internal server error' },
+            {
+                error: 'Internal server error',
+                details: error instanceof Error ? error.message : 'Unknown error',
+            },
             { status: 500 }
         );
     }
