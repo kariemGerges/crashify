@@ -172,7 +172,7 @@ export default function Footer() {
                         <Link href="https://kariemgerges.vercel.app/" 
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-gray-400 hover:text-red-400 transition-colors duration-300">Kariem Gerges</Link>. All rights reserved.
+                        className="text-gray-400 hover:text-red-400 transition-colors duration-300">Developed by Kariem Gerges</Link>. All rights reserved.
                         </p>
                     <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm sm:text-base">
                         {bottomLinks.map(link => (

@@ -45,6 +45,7 @@ import {
 import { format } from 'date-fns';
 import { useToast } from '../Toast';
 
+// Interface for the complaints dashboard data
 interface ComplaintsDashboardData {
     totalThisMonth: number;
     total: number;
@@ -85,12 +86,14 @@ const SENTIMENT_COLORS = {
     negative: '#ef4444',
 };
 
+// Interface for the complaints stats overview props
 interface ComplaintsStatsOverviewProps {
     activeSubTab?: 'overview' | 'analytics' | 'activity';
     onSubTabChange?: (tab: 'overview' | 'analytics' | 'activity') => void;
     showAllSections?: boolean;
 }
 
+// Complaints stats overview component
 export const ComplaintsStatsOverview: React.FC<
     ComplaintsStatsOverviewProps
 > = ({
@@ -117,7 +120,7 @@ export const ComplaintsStatsOverview: React.FC<
         trends: false,
     });
 
-    // Use external subTab if provided, otherwise use internal state
+    // Use the external subTab if provided, otherwise use the internal state
     const currentSubTab = activeSubTab || internalSubTab;
     const setCurrentSubTab = onSubTabChange || setInternalSubTab;
 
@@ -135,6 +138,7 @@ export const ComplaintsStatsOverview: React.FC<
         return () => clearInterval(refreshInterval);
     }, []);
 
+    // Fetch the complaints analytics
     const fetchAnalytics = async (forceRefresh: boolean = false) => {
         try {
             const response = await fetch('/api/analytics/complaints', {
@@ -161,6 +165,7 @@ export const ComplaintsStatsOverview: React.FC<
         }
     };
 
+    // Export the complaints analytics to CSV
     const exportToCSV = async () => {
         setExporting(true);
         setExportType('csv');
@@ -211,6 +216,7 @@ export const ComplaintsStatsOverview: React.FC<
         }
     };
 
+    // Export the complaints analytics to Excel
     const exportToExcel = async () => {
         setExporting(true);
         setExportType('excel');
@@ -263,6 +269,7 @@ export const ComplaintsStatsOverview: React.FC<
         }
     };
 
+    // Generate a PDF report of the complaints analytics
     const generatePDFReport = async () => {
         setExporting(true);
         setExportType('pdf');
@@ -319,6 +326,7 @@ export const ComplaintsStatsOverview: React.FC<
         }
     };
 
+    // If the data is loading, show a loading spinner
     if (loading) {
         return (
             <div className="flex items-center justify-center py-12">
@@ -327,6 +335,7 @@ export const ComplaintsStatsOverview: React.FC<
         );
     }
 
+    // If the data is not loaded, show a message
     if (!data) {
         return (
             <div className="text-center py-12 text-gray-400">
@@ -335,6 +344,7 @@ export const ComplaintsStatsOverview: React.FC<
         );
     }
 
+    // Get the status chart data
     const statusChartData = [
         { name: 'New', value: data.statusBreakdown.new },
         {
@@ -345,6 +355,7 @@ export const ComplaintsStatsOverview: React.FC<
         { name: 'Closed', value: data.statusBreakdown.closed },
     ];
 
+    // Get the sentiment chart data
     const sentimentChartData = [
         {
             name: 'Positive (Resolved/Closed)',
@@ -358,6 +369,7 @@ export const ComplaintsStatsOverview: React.FC<
         },
     ];
 
+    // Get the priority chart data
     const priorityChartData = [
         { name: 'Critical', value: data.priorityBreakdown.critical },
         { name: 'High', value: data.priorityBreakdown.high },
@@ -365,27 +377,31 @@ export const ComplaintsStatsOverview: React.FC<
         { name: 'Low', value: data.priorityBreakdown.low },
     ];
 
-    // Get score color based on value
+    // Get the score color based on value
     const getScoreColor = (score: number) => {
         if (score >= 80) return 'text-green-500';
         if (score >= 60) return 'text-yellow-500';
         return 'text-red-500';
     };
 
+    // Get the score background color based on value
     const getScoreBgColor = (score: number) => {
         if (score >= 80) return 'bg-green-500/10 border-green-500/50';
         if (score >= 60) return 'bg-yellow-500/10 border-yellow-500/50';
         return 'bg-red-500/10 border-red-500/50';
     };
 
+    // Return the complaints stats overview component
     return (
         <div className="space-y-6 relative">
             {/* Floating Export Button - Only show if not showAllSections */}
+            {/* If the showAllSections prop is false, show the export menu */}
             {!showAllSections && (
                 <div
                     className="fixed bottom-24 right-8 z-40"
                     ref={exportMenuRef}
                 >
+                    {/* Export button */}
                     <button
                         onClick={() => setShowExportMenu(!showExportMenu)}
                         disabled={exporting}
@@ -418,6 +434,7 @@ export const ComplaintsStatsOverview: React.FC<
                     </button>
 
                     {/* Dropdown Menu */}
+                    {/* If the showExportMenu state is true and the exporting state is false, show the export menu */}
                     {showExportMenu && !exporting && (
                         <div className="absolute bottom-full right-0 mb-2 w-64 bg-gray-900 border border-amber-500/50 rounded-xl shadow-2xl overflow-hidden">
                             <div className="p-2">
@@ -433,6 +450,7 @@ export const ComplaintsStatsOverview: React.FC<
                                     </button>
                                 </div>
                                 <div className="py-2">
+                                    {/* Export to CSV button */}
                                     <button
                                         onClick={() => {
                                             setShowExportMenu(false);
@@ -450,6 +468,7 @@ export const ComplaintsStatsOverview: React.FC<
                                             </div>
                                         </div>
                                     </button>
+                                    {/* Export to Excel button */}
                                     <button
                                         onClick={() => {
                                             setShowExportMenu(false);
@@ -467,6 +486,7 @@ export const ComplaintsStatsOverview: React.FC<
                                             </div>
                                         </div>
                                     </button>
+                                    {/* Generate PDF Report button */}
                                     <button
                                         onClick={() => {
                                             setShowExportMenu(false);
@@ -484,12 +504,14 @@ export const ComplaintsStatsOverview: React.FC<
                                             </div>
                                         </div>
                                     </button>
+                                    {/* Email Monthly Report button */}
                                     <button
                                         onClick={async () => {
                                             setShowExportMenu(false);
                                             setExporting(true);
                                             setExportType('email');
                                             try {
+                                                // Try to send the email report
                                                 const response = await fetch(
                                                     '/api/analytics/complaints/report/email',
                                                     {
@@ -498,6 +520,7 @@ export const ComplaintsStatsOverview: React.FC<
                                                     }
                                                 );
                                                 if (!response.ok) {
+                                                    // If the response is not ok, throw an error
                                                     const errorData =
                                                         await response
                                                             .json()
@@ -509,23 +532,28 @@ export const ComplaintsStatsOverview: React.FC<
                                                             'Failed to send email'
                                                     );
                                                 }
+                                                // Get the result
                                                 const result =
                                                     await response.json();
+                                                // Show success toast
                                                 showSuccess(
                                                     result.message ||
                                                         'Complaints report email sent successfully!'
                                                 );
                                             } catch (error) {
+                                                // Show error toast
                                                 console.error(
                                                     'Failed to send email:',
                                                     error
                                                 );
+                                                // Show error toast
                                                 showError(
                                                     error instanceof Error
                                                         ? error.message
                                                         : 'Failed to send email report'
                                                 );
                                             } finally {
+                                                // Set the exporting state to false
                                                 setExporting(false);
                                                 setExportType(null);
                                             }
@@ -550,6 +578,7 @@ export const ComplaintsStatsOverview: React.FC<
             )}
 
             {/* Alert banner for overdue items */}
+            {/* If the number of overdue items is greater than 0, show the alert banner */}
             {data.overdue > 0 && (
                 <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 mb-6 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -568,7 +597,7 @@ export const ComplaintsStatsOverview: React.FC<
                 </div>
             )}
 
-            {/* Complaints Overview Section */}
+            {/* If the showAllSections prop is true or the currentSubTab is 'overview', show the complaints overview section */}
             {(showAllSections || currentSubTab === 'overview') && (
                 <div className="space-y-6">
                     {/* Key Metrics */}

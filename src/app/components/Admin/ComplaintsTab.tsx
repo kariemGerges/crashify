@@ -39,6 +39,7 @@ import {
     BarChart3,
     Activity,
     RefreshCw,
+    Mail,
 } from 'lucide-react';
 import { useToast } from '../Toast';
 import { format } from 'date-fns';
@@ -120,22 +121,39 @@ const SENTIMENT_COLORS = {
     negative: '#ef4444',
 };
 
+// Complaints tab component props
+interface ComplaintsTabProps {
+    cachedAnalytics?: ComplaintsAnalytics | null;
+    isLoadingAnalytics?: boolean;
+    lastRefreshed?: Date | null;
+    onRefreshAnalytics?: (forceRefresh: boolean) => void;
+}
+
 // Complaints tab component
-export const ComplaintsTab: React.FC = () => {
+export const ComplaintsTab: React.FC<ComplaintsTabProps> = ({
+    cachedAnalytics = null,
+    isLoadingAnalytics = false,
+    lastRefreshed: propLastRefreshed = null,
+    onRefreshAnalytics,
+}) => {
     const toast = useToast();
     const [complaints, setComplaints] = useState<Complaint[]>([]);
     // State for the stats
     const [stats, setStats] = useState<ComplaintStats | null>(null);
-    const [analytics, setAnalytics] = useState<ComplaintsAnalytics | null>(null);
+    const [analytics, setAnalytics] = useState<ComplaintsAnalytics | null>(
+        cachedAnalytics
+    );
     // State for the loading of the complaints
     const [loading, setLoading] = useState(true);
     // State for the loading of the analytics
-    const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+    const [loadingAnalytics, setLoadingAnalytics] = useState(!cachedAnalytics);
     // State for the selected complaint
     const [selectedComplaint, setSelectedComplaint] =
         useState<Complaint | null>(null);
     // State for the selected attachments
-    const [selectedAttachments, setSelectedAttachments] = useState<ComplaintAttachment[]>([]);
+    const [selectedAttachments, setSelectedAttachments] = useState<
+        ComplaintAttachment[]
+    >([]);
     // State for the show detail modal
     const [showDetailModal, setShowDetailModal] = useState(false);
     // State for the show message modal
@@ -157,11 +175,37 @@ export const ComplaintsTab: React.FC = () => {
     // State for the total pages of the complaints
     const [totalPages, setTotalPages] = useState(1);
 
+    // Email processing state
+    const [processingEmails, setProcessingEmails] = useState(false);
+    const [emailProcessResult, setEmailProcessResult] = useState<{
+        processed: number;
+        created: number;
+        errors: Array<{ emailId: string; error: string }>;
+    } | null>(null);
+
+    // Update analytics when cached data changes
+    useEffect(() => {
+        if (cachedAnalytics) {
+            setAnalytics(cachedAnalytics);
+            setLoadingAnalytics(false);
+        }
+    }, [cachedAnalytics]);
+
+    // Update loading state when prop changes
+    useEffect(() => {
+        setLoadingAnalytics(isLoadingAnalytics);
+    }, [isLoadingAnalytics]);
+
     // Fetch complaints, stats, and analytics when the page or filters change
     useEffect(() => {
         fetchComplaints();
         fetchStats();
-        fetchAnalytics();
+        // Only fetch analytics if we don't have cached data and onRefreshAnalytics is provided
+        if (!cachedAnalytics && onRefreshAnalytics) {
+            onRefreshAnalytics(false);
+        } else if (!cachedAnalytics) {
+            fetchAnalytics();
+        }
     }, [page, filters]);
 
     // Fetch complaints
@@ -205,11 +249,24 @@ export const ComplaintsTab: React.FC = () => {
     };
 
     // Fetch analytics
-    const fetchAnalytics = async () => {
+    const fetchAnalytics = async (forceRefresh: boolean = false) => {
+        // If onRefreshAnalytics callback is provided, use it instead of fetching directly
+        if (onRefreshAnalytics) {
+            onRefreshAnalytics(forceRefresh);
+            return;
+        }
+
+        // Fallback to direct fetch if no callback provided (for backward compatibility)
         setLoadingAnalytics(true);
         try {
             const response = await fetch('/api/analytics/complaints', {
                 credentials: 'include',
+                cache: forceRefresh ? 'no-store' : 'default',
+                ...(forceRefresh && {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                    },
+                }),
             });
             if (!response.ok) throw new Error('Failed to fetch analytics');
             const data = await response.json();
@@ -261,7 +318,12 @@ export const ComplaintsTab: React.FC = () => {
 
             toast.showSuccess('Status updated successfully');
             fetchComplaints();
-            fetchAnalytics();
+            // Force refresh analytics after status update
+            if (onRefreshAnalytics) {
+                onRefreshAnalytics(true);
+            } else {
+                fetchAnalytics(true);
+            }
             if (selectedComplaint?.id === id) {
                 fetchComplaintDetail(id);
             }
@@ -399,6 +461,76 @@ export const ComplaintsTab: React.FC = () => {
         setPage(1);
     };
 
+    // Handle the process complaint emails action
+    const handleProcessComplaintEmails = async () => {
+        setProcessingEmails(true);
+        setEmailProcessResult(null);
+
+        try {
+            // Try to process the complaint emails
+            const response = await fetch('/api/email/process-complaints', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+            });
+
+            // Get the result
+            const result = await response.json();
+
+            // If the response is not ok, throw an error
+            if (!response.ok) {
+                throw new Error(
+                    result.error ||
+                        result.details ||
+                        'Failed to process complaint emails'
+                );
+            }
+
+            // Set the email process result
+            setEmailProcessResult({
+                processed: result.processed || 0,
+                created: result.created || 0,
+                errors: Array.isArray(result.errors)
+                    ? result.errors.map(
+                          (err: string | { emailId: string; error: string }) =>
+                              typeof err === 'string'
+                                  ? { emailId: 'unknown', error: err }
+                                  : err
+                      )
+                    : [],
+            });
+
+            // Show success toast
+            toast.showSuccess(
+                `Processed ${result.processed || 0} emails, created ${
+                    result.created || 0
+                } complaints`
+            );
+
+            // Reload complaints
+            fetchComplaints();
+            fetchStats();
+        } catch (err: unknown) {
+            // Show error toast
+            const errorMessage =
+                err instanceof Error
+                    ? err.message
+                    : 'Failed to process complaint emails';
+            toast.showError(errorMessage);
+            // Set the email process result
+            setEmailProcessResult({
+                processed: 0,
+                created: 0,
+                errors: [{ emailId: 'system', error: errorMessage }],
+            });
+        } finally {
+            // Set the processing emails to false
+            setProcessingEmails(false);
+        }
+    };
+
     // Prepare status chart data
     const statusChartData = analytics
         ? [
@@ -429,7 +561,7 @@ export const ComplaintsTab: React.FC = () => {
         : [];
 
     // Prepare priority chart data
-        const priorityChartData = analytics
+    const priorityChartData = analytics
         ? [
               { name: 'Critical', value: analytics.priorityBreakdown.critical },
               { name: 'High', value: analytics.priorityBreakdown.high },
@@ -441,6 +573,180 @@ export const ComplaintsTab: React.FC = () => {
     // Render the component
     return (
         <div className="space-y-6">
+            {/* Header with refresh button */}
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-white">
+                    Complaints Dashboard
+                </h2>
+                <div className="flex items-center gap-3">
+                    {propLastRefreshed && (
+                        <div className="text-sm text-gray-400 hidden md:block">
+                            Last refreshed:{' '}
+                            {format(propLastRefreshed, 'MMM dd, yyyy HH:mm')}
+                        </div>
+                    )}
+                    <button
+                        onClick={() => {
+                            if (onRefreshAnalytics) {
+                                setLoadingAnalytics(true);
+                                onRefreshAnalytics(true);
+                            } else {
+                                fetchAnalytics(true);
+                            }
+                        }}
+                        disabled={loadingAnalytics}
+                        className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/50 text-amber-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Refresh data"
+                    >
+                        <RefreshCw
+                            className={`w-4 h-4 ${
+                                loadingAnalytics ? 'animate-spin' : ''
+                            }`}
+                        />
+                        <span className="hidden sm:inline">Refresh</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Email Processing Section */}
+            <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-red-600 rounded-lg flex items-center justify-center">
+                        <Mail className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-bold text-white">
+                            Email Processing
+                        </h3>
+                        <p className="text-gray-400 text-sm">
+                            Manually trigger email processing from "Urgent
+                            Complaints" folder
+                        </p>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <p className="text-white font-medium">
+                                    Process Unread Emails
+                                </p>
+                                <p className="text-gray-400 text-sm">
+                                    Check for new emails in "Urgent Complaints"
+                                    folder and create complaints automatically
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleProcessComplaintEmails}
+                                disabled={processingEmails}
+                                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-red-600 text-white rounded-lg hover:from-amber-600 hover:to-red-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {processingEmails ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="w-4 h-4" />
+                                        Process Emails
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {emailProcessResult && (
+                            <div
+                                className={`mt-4 p-4 rounded-lg border ${
+                                    emailProcessResult.errors.length > 0
+                                        ? 'bg-red-500/10 border-red-500/50'
+                                        : 'bg-green-500/10 border-green-500/50'
+                                }`}
+                            >
+                                <div className="flex items-start gap-3">
+                                    {emailProcessResult.errors.length > 0 ? (
+                                        <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                                    ) : (
+                                        <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                                    )}
+                                    <div className="flex-1">
+                                        <p
+                                            className={`font-medium mb-2 ${
+                                                emailProcessResult.errors
+                                                    .length > 0
+                                                    ? 'text-red-400'
+                                                    : 'text-green-400'
+                                            }`}
+                                        >
+                                            Processing Complete
+                                        </p>
+                                        <div className="space-y-1 text-sm">
+                                            <p className="text-gray-300">
+                                                <span className="font-medium">
+                                                    Emails Processed:
+                                                </span>{' '}
+                                                {emailProcessResult.processed}
+                                            </p>
+                                            <p className="text-gray-300">
+                                                <span className="font-medium">
+                                                    Complaints Created:
+                                                </span>{' '}
+                                                {emailProcessResult.created}
+                                            </p>
+                                            {emailProcessResult.errors.length >
+                                                0 && (
+                                                <div className="mt-2">
+                                                    <p className="text-red-400 font-medium mb-1">
+                                                        Errors:
+                                                    </p>
+                                                    <ul className="list-disc list-inside text-red-300 space-y-1">
+                                                        {emailProcessResult.errors.map(
+                                                            (
+                                                                errorItem,
+                                                                idx
+                                                            ) => (
+                                                                <li
+                                                                    key={idx}
+                                                                    className="text-xs"
+                                                                >
+                                                                    {errorItem.emailId &&
+                                                                        errorItem.emailId !==
+                                                                            'system' && (
+                                                                            <span className="font-medium">
+                                                                                {
+                                                                                    errorItem.emailId
+                                                                                }
+
+                                                                                :{' '}
+                                                                            </span>
+                                                                        )}
+                                                                    {
+                                                                        errorItem.error
+                                                                    }
+                                                                </li>
+                                                            )
+                                                        )}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() =>
+                                            setEmailProcessResult(null)
+                                        }
+                                        className="text-gray-400 hover:text-white transition-colors"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
             {/* Alert banner for overdue items */}
             {analytics && analytics.overdue > 0 && (
                 <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 flex items-center justify-between">
@@ -458,11 +764,23 @@ export const ComplaintsTab: React.FC = () => {
                         </div>
                     </div>
                     <button
-                        onClick={fetchAnalytics}
-                        className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                        onClick={() => {
+                            if (onRefreshAnalytics) {
+                                setLoadingAnalytics(true);
+                                onRefreshAnalytics(true);
+                            } else {
+                                fetchAnalytics(true);
+                            }
+                        }}
+                        disabled={loadingAnalytics}
+                        className="p-2 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Refresh Analytics"
                     >
-                        <RefreshCw className="w-4 h-4 text-red-500" />
+                        <RefreshCw
+                            className={`w-4 h-4 text-red-500 ${
+                                loadingAnalytics ? 'animate-spin' : ''
+                            }`}
+                        />
                     </button>
                 </div>
             )}
@@ -482,9 +800,7 @@ export const ComplaintsTab: React.FC = () => {
                                     analytics.satisfactionScore
                                 )}`}
                             />
-                            <span className="text-xs text-gray-400">
-                                Score
-                            </span>
+                            <span className="text-xs text-gray-400">Score</span>
                         </div>
                         <p
                             className={`text-3xl font-bold mb-1 ${getScoreColor(
@@ -531,7 +847,9 @@ export const ComplaintsTab: React.FC = () => {
                     <div className="bg-gray-900/50 border border-red-500/20 rounded-xl p-5">
                         <div className="flex items-center justify-between mb-2">
                             <ThumbsDown className="w-6 h-6 text-red-500" />
-                            <span className="text-xs text-gray-400">Active</span>
+                            <span className="text-xs text-gray-400">
+                                Active
+                            </span>
                         </div>
                         <p className="text-3xl font-bold text-white mb-1">
                             {analytics.negative}
@@ -836,7 +1154,10 @@ export const ComplaintsTab: React.FC = () => {
                             </div>
                             <div className="bg-black/30 border border-yellow-500/30 rounded-lg p-4 text-center">
                                 <p className="text-3xl font-bold text-yellow-400 mb-1">
-                                    {analytics.statusBreakdown.under_investigation}
+                                    {
+                                        analytics.statusBreakdown
+                                            .under_investigation
+                                    }
                                 </p>
                                 <p className="text-sm text-gray-400">
                                     Under Investigation
@@ -846,7 +1167,9 @@ export const ComplaintsTab: React.FC = () => {
                                 <p className="text-3xl font-bold text-green-400 mb-1">
                                     {analytics.statusBreakdown.resolved}
                                 </p>
-                                <p className="text-sm text-gray-400">Resolved</p>
+                                <p className="text-sm text-gray-400">
+                                    Resolved
+                                </p>
                             </div>
                             <div className="bg-black/30 border border-gray-500/30 rounded-lg p-4 text-center">
                                 <p className="text-3xl font-bold text-gray-400 mb-1">
@@ -1137,7 +1460,8 @@ export const ComplaintsTab: React.FC = () => {
                                 <div>
                                     <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
                                         <FileText className="w-5 h-5 text-amber-500" />
-                                        Attachments ({selectedAttachments.length})
+                                        Attachments (
+                                        {selectedAttachments.length})
                                     </h3>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                         {selectedAttachments.map(attachment => (
@@ -1147,8 +1471,7 @@ export const ComplaintsTab: React.FC = () => {
                                             >
                                                 {attachment.file_type.startsWith(
                                                     'image/'
-                                                ) &&
-                                                attachment.signed_url ? (
+                                                ) && attachment.signed_url ? (
                                                     <div className="mb-3">
                                                         <img
                                                             src={

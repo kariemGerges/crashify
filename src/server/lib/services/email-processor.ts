@@ -370,6 +370,22 @@ export class EmailProcessor {
     }
 
     /**
+     * Process unread emails and create complaints
+     * Uses Microsoft Graph API if configured, otherwise falls back to IMAP
+     */
+    async processComplaintEmails(
+        requestId?: string,
+        userId?: string,
+        folderName: string = 'Urgent Complaints'
+    ): Promise<EmailProcessingResult> {
+        if (this.useGraphAPI && this.graphEmailService) {
+            return this.processComplaintEmailsGraphAPI(requestId, userId, folderName);
+        } else {
+            return this.processComplaintEmailsIMAP(requestId, userId);
+        }
+    }
+
+    /**
      * Process unread emails using Microsoft Graph API (OAuth2)
      */
     private async processUnreadEmailsGraphAPI(
@@ -655,6 +671,425 @@ Check the error logs above for detailed troubleshooting steps.`;
         }
 
         return result;
+    }
+
+    /**
+     * Process unread complaint emails using Microsoft Graph API (OAuth2)
+     */
+    private async processComplaintEmailsGraphAPI(
+        requestId?: string,
+        userId?: string,
+        folderName: string = 'Urgent Complaints'
+    ): Promise<EmailProcessingResult> {
+        const result: EmailProcessingResult = {
+            success: true,
+            processed: 0,
+            created: 0,
+            errors: [],
+        };
+
+        if (!this.graphEmailService) {
+            result.success = false;
+            result.errors.push({
+                emailId: 'system',
+                error: 'Graph API service not initialized',
+            });
+            return result;
+        }
+
+        try {
+            // Test connection first
+            const isConnected = await this.graphEmailService.testConnection();
+            if (!isConnected) {
+                throw new Error('Failed to connect to Microsoft Graph API');
+            }
+
+            // Get unread emails from the specified folder
+            const graphEmails = await this.graphEmailService.getUnreadEmails(folderName);
+            
+            // Get folder ID for subsequent operations
+            const folderId = await this.graphEmailService.getFolderByName(folderName);
+
+            if (graphEmails.length === 0) {
+                logger.info('No unread complaint emails found', { folderName });
+                return result;
+            }
+
+            logger.info('Found unread complaint emails', {
+                count: graphEmails.length,
+                folder: folderName,
+                method: 'graph_api',
+            });
+
+            // Process each email
+            for (let i = 0; i < graphEmails.length; i++) {
+                const graphEmail = graphEmails[i];
+                let processingLogId: string | null = null;
+                
+                try {
+                    result.processed++;
+                    
+                    logger.debug('Processing complaint email', {
+                        index: i + 1,
+                        total: graphEmails.length,
+                        emailId: graphEmail.id,
+                        from: graphEmail.from.emailAddress.address,
+                        subject: graphEmail.subject || '(no subject)',
+                    });
+
+                    // Log email processing start
+                    processingLogId = await this.logEmailProcessing({
+                        email_provider_id: graphEmail.id,
+                        email_provider_type: 'microsoft_graph',
+                        folder_name: folderName,
+                        email_from: graphEmail.from.emailAddress.address,
+                        email_from_name: graphEmail.from.emailAddress.name || null,
+                        email_subject: graphEmail.subject || null,
+                        email_received_at: graphEmail.receivedDateTime || null,
+                        email_message_id: graphEmail.internetMessageId || null,
+                        email_has_attachments: graphEmail.hasAttachments || false,
+                        email_attachments_count: 0,
+                        processing_status: 'processing',
+                        processing_method: 'graph_api',
+                        processing_started_at: new Date().toISOString(),
+                        request_id: requestId || null,
+                        processed_by_user_id: userId || null,
+                        processing_batch_id: this.currentBatchId,
+                        email_body_preview: graphEmail.bodyPreview?.substring(0, 500) || null,
+                    });
+
+                    // Parse email to ParsedMail format
+                    const parsedEmail = await this.graphEmailService.parseEmail(
+                        graphEmail,
+                        folderId || undefined
+                    );
+
+                    // Create complaint from email
+                    const complaintCreated = await this.createComplaintFromEmail(
+                        parsedEmail,
+                        graphEmail.id
+                    );
+
+                    if (complaintCreated) {
+                        result.created++;
+                        
+                        // Mark email as read
+                        await this.graphEmailService.markEmailAsRead(
+                            graphEmail.id,
+                            folderId || undefined
+                        );
+
+                        // Update processing log
+                        if (processingLogId) {
+                            await this.updateEmailProcessingLog(processingLogId, {
+                                processing_status: 'completed',
+                                processing_completed_at: new Date().toISOString(),
+                                assessment_created: false,
+                            } as Record<string, unknown>);
+                        }
+                    } else {
+                        throw new Error('Failed to create complaint from email');
+                    }
+                } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                    logger.error('Error processing complaint email', err, {
+                        emailId: graphEmail.id,
+                    });
+                    
+                            // Update processing log
+                            if (processingLogId) {
+                                await this.updateEmailProcessingLog(processingLogId, {
+                                    processing_status: 'failed',
+                                    processing_completed_at: new Date().toISOString(),
+                                } as Record<string, unknown>);
+                            }
+                    
+                    result.errors.push({
+                        emailId: graphEmail.id,
+                        error: errorMessage,
+                    });
+                }
+            }
+            
+            logger.info('Complaint email processing complete (Graph API)', {
+                processed: result.processed,
+                created: result.created,
+                errors: result.errors.length,
+            });
+        } catch (err) {
+            logger.error('Error processing complaint emails (Graph API)', err);
+            result.success = false;
+            result.errors.push({
+                emailId: 'system',
+                error: err instanceof Error ? err.message : 'Unknown error',
+            });
+        }
+
+        return result;
+    }
+
+    /**
+     * Process unread complaint emails using IMAP (legacy)
+     */
+    private async processComplaintEmailsIMAP(
+        requestId?: string,
+        userId?: string
+    ): Promise<EmailProcessingResult> {
+        const result: EmailProcessingResult = {
+            success: true,
+            processed: 0,
+            created: 0,
+            errors: [],
+        };
+
+        try {
+            await this.connect();
+
+            await new Promise<void>((resolve, reject) => {
+                if (!this.imap) {
+                    reject(new Error('IMAP not connected'));
+                    return;
+                }
+
+                // Open the "Urgent Complaints" folder (or INBOX if folder doesn't exist)
+                this.imap.openBox('Urgent Complaints', false, (err, box) => {
+                    if (err) {
+                        // If folder doesn't exist, try INBOX
+                        logger.warn('Urgent Complaints folder not found, trying INBOX', { error: err.message });
+                        this.imap!.openBox('INBOX', false, (openErr, inboxBox) => {
+                            if (openErr) {
+                                reject(openErr);
+                                return;
+                            }
+                            this.processComplaintEmailsFromBox(inboxBox, result, requestId, userId)
+                                .then(() => resolve())
+                                .catch(reject);
+                        });
+                        return;
+                    }
+                    this.processComplaintEmailsFromBox(box, result, requestId, userId)
+                        .then(() => resolve())
+                        .catch(reject);
+                });
+            });
+
+            await this.disconnect();
+        } catch (err) {
+            logger.error('Error processing complaint emails (IMAP)', err);
+            result.success = false;
+            result.errors.push({
+                emailId: 'system',
+                error: err instanceof Error ? err.message : 'Unknown error',
+            });
+        }
+
+        return result;
+    }
+
+    /**
+     * Process complaint emails from an IMAP box
+     */
+    private async processComplaintEmailsFromBox(
+        box: Imap.Box,
+        result: EmailProcessingResult,
+        requestId?: string,
+        userId?: string
+    ): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (!this.imap) {
+                reject(new Error('IMAP not connected'));
+                return;
+            }
+
+            // Search for unread emails
+            this.imap.search(['UNSEEN'], (err, results) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                if (!results || results.length === 0) {
+                    logger.info('No unread complaint emails found');
+                    resolve();
+                    return;
+                }
+
+                logger.info('Found unread complaint emails', { count: results.length });
+
+                const fetch = this.imap!.fetch(results, { bodies: '', struct: true });
+                let processedCount = 0;
+                const totalCount = results.length;
+
+                fetch.on('message', (msg, seqno) => {
+                    let buffer = Buffer.alloc(0);
+                    
+                    msg.on('body', (stream) => {
+                        stream.on('data', (chunk: Buffer) => {
+                            buffer = Buffer.concat([buffer, chunk]);
+                        });
+                        
+                        stream.once('end', async () => {
+                            try {
+                                const parsed = await simpleParser(buffer);
+                                result.processed++;
+
+                                const complaintCreated = await this.createComplaintFromEmail(
+                                    parsed,
+                                    seqno.toString()
+                                );
+
+                                if (complaintCreated) {
+                                    result.created++;
+                                    // Mark as read
+                                    this.imap!.setFlags([seqno], ['\\Seen'], (flagErr) => {
+                                        if (flagErr) {
+                                            logger.error('Failed to mark email as read', flagErr);
+                                        }
+                                    });
+                                }
+                            } catch (err) {
+                                logger.error('Error processing complaint email', err);
+                                result.errors.push({
+                                    emailId: seqno.toString(),
+                                    error: err instanceof Error ? err.message : 'Unknown error',
+                                });
+                            } finally {
+                                processedCount++;
+                                if (processedCount === totalCount) {
+                                    resolve();
+                                }
+                            }
+                        });
+                    });
+                });
+
+                fetch.once('error', (err) => {
+                    reject(err);
+                });
+
+                fetch.once('end', () => {
+                    if (processedCount < totalCount) {
+                        // Some emails may have failed to process
+                        resolve();
+                    }
+                });
+            });
+        });
+    }
+
+    /**
+     * Create a complaint from email data
+     */
+    private async createComplaintFromEmail(
+        email: ParsedMail | {
+            from: { text: string; value: Array<{ address: string }> };
+            subject: string;
+            text: string;
+            html: string | null;
+            date: Date;
+        },
+        emailId: string | number
+    ): Promise<boolean> {
+        try {
+            const senderEmail = email.from?.text || (email.from?.value?.[0] && 'address' in email.from.value[0] ? email.from.value[0].address : '') || '';
+            const senderName = (email.from?.value?.[0] && 'name' in email.from.value[0] ? email.from.value[0].name : null) || 
+                              email.from?.text?.split('<')[0]?.trim() || 
+                              senderEmail.split('@')[0] || 
+                              'Unknown';
+
+            // Use email subject and body as description
+            const emailText = email.text || email.html || '';
+            const description = email.subject 
+                ? `${email.subject}\n\n${emailText.substring(0, 2000)}`
+                : emailText.substring(0, 2000);
+
+            if (description.trim().length < 10) {
+                logger.warn('Email content too short to create complaint', {
+                    emailId: String(emailId),
+                    senderEmail,
+                });
+                return false;
+            }
+
+            // Extract phone if available in email text
+            const phoneMatch = emailText.match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+            const phone = phoneMatch ? phoneMatch[0] : null;
+
+            // Determine category and priority from email content
+            const emailContent = (email.subject + ' ' + emailText).toLowerCase();
+            let category: 'service_quality' | 'delayed_response' | 'incorrect_assessment' | 'billing_issue' | 'communication' | 'data_privacy' | 'other' = 'other';
+            let priority: 'low' | 'medium' | 'high' | 'critical' = 'medium';
+
+            if (emailContent.includes('urgent') || emailContent.includes('critical') || emailContent.includes('immediate')) {
+                priority = 'critical';
+            } else if (emailContent.includes('important') || emailContent.includes('asap')) {
+                priority = 'high';
+            }
+
+            if (emailContent.includes('billing') || emailContent.includes('invoice') || emailContent.includes('payment')) {
+                category = 'billing_issue';
+            } else if (emailContent.includes('service') || emailContent.includes('quality') || emailContent.includes('work')) {
+                category = 'service_quality';
+            } else if (emailContent.includes('communication') || emailContent.includes('response') || emailContent.includes('reply')) {
+                category = 'communication';
+            }
+
+            // Import Database type
+            type ComplaintInsert = import('@/server/lib/types/database.types').Database['public']['Tables']['complaints']['Insert'];
+
+            const complaintData: ComplaintInsert = {
+                complainant_name: senderName,
+                complainant_email: senderEmail.toLowerCase(),
+                complainant_phone: phone,
+                category,
+                priority,
+                description: description.trim(),
+                status: 'new',
+                metadata: {
+                    source: 'email',
+                    emailId: String(emailId),
+                    emailSubject: email.subject || null,
+                    emailReceivedAt: email.date?.toISOString() || null,
+                },
+            };
+
+            const { data: complaint, error } = await (
+                this.supabase.from('complaints') as unknown as {
+                    insert: (values: ComplaintInsert) => {
+                        select: () => {
+                            single: () => Promise<{
+                                data: { id: string } | null;
+                                error: { message: string } | null;
+                            }>;
+                        };
+                    };
+                }
+            )
+                .insert(complaintData)
+                .select()
+                .single();
+
+            if (error || !complaint) {
+                logger.error('Failed to create complaint from email', error, {
+                    emailId: String(emailId),
+                    senderEmail,
+                });
+                return false;
+            }
+
+            logger.info('Complaint created from email', {
+                complaintId: complaint.id,
+                emailId: String(emailId),
+                senderEmail,
+            });
+
+            return true;
+        } catch (err) {
+            logger.error('Error creating complaint from email', err, {
+                emailId: String(emailId),
+            });
+            return false;
+        }
     }
 
     /**

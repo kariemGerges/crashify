@@ -51,6 +51,11 @@ interface DashboardData {
     averageDaysToComplete: number;
     revenueThisMonth: number;
     overdue: number;
+    sourceBreakdown?: {
+        web_form: number;
+        email: number;
+        manual: number;
+    } | null;
     statusBreakdown: {
         pending: number;
         processing: number;
@@ -77,18 +82,77 @@ const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#0ea5e9'];
 interface EnhancedStatsOverviewProps {
     showAllSections?: boolean;
     mainTab?: 'assessments' | 'complaints';
+    cachedData?: DashboardData | null | Record<string, DashboardData>;
+    isLoading?: boolean;
+    lastRefreshed?: Date | null | Record<string, Date>;
+    onRefresh?: (forceRefresh: boolean, sourceFilter?: string) => void;
 }
 
 export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
     showAllSections = false,
     mainTab = 'assessments',
+    cachedData = null,
+    isLoading = false,
+    lastRefreshed: propLastRefreshed = null,
+    onRefresh,
 }) => {
     const { showSuccess, showError } = useToast();
-    const [data, setData] = useState<DashboardData | null>(null);
-    const [loading, setLoading] = useState(true);
+    
+    // Helper function to extract data from cachedData
+    const extractDataFromCache = (cache: typeof cachedData, filter: string = 'all'): DashboardData | null => {
+        if (!cache) return null;
+        
+        if (typeof cache === 'object' && !Array.isArray(cache) && 'totalThisMonth' in cache && 'statusBreakdown' in cache) {
+            return cache as DashboardData;
+        }
+        
+        // If it's a Record, try to get data for the specified filter
+        if (typeof cache === 'object') {
+            const record = cache as Record<string, DashboardData>;
+            if (filter in record) {
+                const recordData = record[filter];
+                if (recordData && 'statusBreakdown' in recordData) {
+                    return recordData;
+                }
+            }
+            // Fallback to 'all' if specified filter not found
+            if (filter !== 'all' && 'all' in record) {
+                const recordData = record['all'];
+                if (recordData && 'statusBreakdown' in recordData) {
+                    return recordData;
+                }
+            }
+        }
+        
+        return null;
+    };
+    
+    const [sourceFilter, setSourceFilter] = useState<
+        'all' | 'web_form' | 'email' | 'manual'
+    >('all');
+    
+    // Helper to extract date from propLastRefreshed
+    const extractLastRefreshed = (prop: typeof propLastRefreshed, filter: string): Date | null => {
+        if (!prop) return null;
+        if (prop instanceof Date) return prop;
+        if (typeof prop === 'object' && filter in prop) {
+            const dateValue = prop[filter];
+            if (dateValue instanceof Date) return dateValue;
+            if (typeof dateValue === 'string') {
+                const parsed = new Date(dateValue);
+                return isNaN(parsed.getTime()) ? null : parsed;
+            }
+        }
+        return null;
+    };
+
+    const [data, setData] = useState<DashboardData | null>(() => extractDataFromCache(cachedData, 'all'));
+    const [loading, setLoading] = useState(() => !extractDataFromCache(cachedData, 'all'));
     const [exporting, setExporting] = useState(false);
     const [exportType, setExportType] = useState<string | null>(null);
-    const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+    const [lastRefreshed, setLastRefreshed] = useState<Date | null>(() => 
+        extractLastRefreshed(propLastRefreshed, sourceFilter)
+    );
     const [showExportMenu, setShowExportMenu] = useState(false);
     const exportMenuRef = React.useRef<HTMLDivElement>(null);
     const [activeMainTab, setActiveMainTab] = useState<
@@ -97,9 +161,6 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
     const [assessmentsSubTab, setAssessmentsSubTab] = useState<
         'overview' | 'analytics' | 'activity'
     >('overview');
-    const [sourceFilter, setSourceFilter] = useState<
-        'all' | 'web_form' | 'email'
-    >('all');
     const [complaintsSubTab, setComplaintsSubTab] = useState<
         'overview' | 'analytics' | 'activity'
     >('overview');
@@ -114,19 +175,53 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
     //     activity: false,
     // });
 
+    // Update data when cached data changes
     useEffect(() => {
-        fetchAnalytics(false);
+        const extractedData = extractDataFromCache(cachedData, sourceFilter);
+        if (extractedData) {
+            setData(extractedData);
+            setLoading(false);
+        } else if (cachedData === null) {
+            // Only clear data if cachedData is explicitly null (not just empty object)
+            setData(null);
+        }
+    }, [cachedData, sourceFilter]);
+
+    // Update loading state when prop changes
+    useEffect(() => {
+        setLoading(isLoading);
+    }, [isLoading]);
+
+    // Update lastRefreshed when prop changes
+    useEffect(() => {
+        const extracted = extractLastRefreshed(propLastRefreshed, sourceFilter);
+        setLastRefreshed(extracted);
+    }, [propLastRefreshed, sourceFilter]);
+
+    useEffect(() => {
+        // Check if we have cached data for current sourceFilter
+        const hasCachedData = cachedData && (
+            (typeof cachedData === 'object' && !Array.isArray(cachedData) && 'totalThisMonth' in cachedData) ||
+            (typeof cachedData === 'object' && sourceFilter in (cachedData as Record<string, DashboardData>))
+        );
+
+        // Only fetch if we don't have cached data and onRefresh is provided
+        if (!hasCachedData && onRefresh) {
+            onRefresh(false, sourceFilter);
+        }
 
         // Auto-refresh every 30 minutes (1800000 ms)
         const refreshInterval = setInterval(
             () => {
-                fetchAnalytics(false); // Use cache if available
+                if (onRefresh) {
+                    onRefresh(false, sourceFilter); // Use cache if available
+                }
             },
             30 * 60 * 1000
         );
 
         return () => clearInterval(refreshInterval);
-    }, [sourceFilter]);
+    }, [sourceFilter, cachedData, onRefresh]);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -149,6 +244,13 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
     }, [showExportMenu]);
 
     const fetchAnalytics = async (forceRefresh: boolean = false) => {
+        // If onRefresh callback is provided, use it instead of fetching directly
+        if (onRefresh) {
+            onRefresh(forceRefresh, sourceFilter);
+            return;
+        }
+
+        // Fallback to direct fetch if no callback provided (for backward compatibility)
         try {
             const url = new URL('/api/analytics/dashboard', window.location.origin);
             if (sourceFilter !== 'all') {
@@ -327,7 +429,7 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
         );
     }
 
-    if (!data) {
+    if (!data || !data.statusBreakdown) {
         return (
             <div className="text-center py-12 text-gray-400">
                 Failed to load analytics
@@ -336,10 +438,10 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
     }
 
     const statusChartData = [
-        { name: 'Pending', value: data.statusBreakdown.pending },
-        { name: 'Processing', value: data.statusBreakdown.processing },
-        { name: 'Completed', value: data.statusBreakdown.completed },
-        { name: 'Cancelled', value: data.statusBreakdown.cancelled },
+        { name: 'Pending', value: data.statusBreakdown.pending || 0 },
+        { name: 'Processing', value: data.statusBreakdown.processing || 0 },
+        { name: 'Completed', value: data.statusBreakdown.completed || 0 },
+        { name: 'Cancelled', value: data.statusBreakdown.cancelled || 0 },
     ];
 
     return (
@@ -523,7 +625,7 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
                         Dashboard
                     </h2>
                     <div className="flex items-center gap-3">
-                        {lastRefreshed && (
+                        {lastRefreshed && !isNaN(lastRefreshed.getTime()) && (
                             <div className="text-sm text-gray-400 hidden md:block">
                                 Last refreshed:{' '}
                                 {format(lastRefreshed, 'MMM dd, yyyy HH:mm')}
@@ -531,8 +633,13 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
                         )}
                         <button
                             onClick={() => {
-                                setLoading(true);
-                                fetchAnalytics(true);
+                                if (onRefresh) {
+                                    setLoading(true);
+                                    onRefresh(true, sourceFilter);
+                                } else {
+                                    setLoading(true);
+                                    fetchAnalytics(true);
+                                }
                             }}
                             disabled={loading}
                             className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/50 text-amber-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -651,6 +758,16 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
                         >
                             Email Processed
                         </button>
+                        <button
+                            onClick={() => setSourceFilter('manual')}
+                            className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${
+                                sourceFilter === 'manual'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                                    : 'bg-gray-800/50 text-gray-400 hover:text-white border border-gray-700'
+                            }`}
+                        >
+                            Manually Added
+                        </button>
                     </div>
                 )}
 
@@ -735,9 +852,25 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
                                     <p className="text-3xl font-bold text-white mb-1">
                                         {data.totalThisMonth}
                                     </p>
-                                    <p className="text-sm text-gray-400">
+                                    <p className="text-sm text-gray-400 mb-2">
                                         Total Assessments
                                     </p>
+                                    {sourceFilter === 'all' && data.sourceBreakdown && (
+                                        <div className="mt-3 pt-3 border-t border-gray-700/50 space-y-1.5">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-gray-400">User Submitted:</span>
+                                                <span className="text-white font-medium">{data.sourceBreakdown.web_form}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-gray-400">Email Processed:</span>
+                                                <span className="text-white font-medium">{data.sourceBreakdown.email}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-gray-400">Manually Added:</span>
+                                                <span className="text-white font-medium">{data.sourceBreakdown.manual}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="bg-gradient-to-br from-green-500/20 to-green-500/5 border border-green-500/30 rounded-xl p-5 hover:border-green-500/50 transition-all">

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
         // Get source filter from query params
         const searchParams = request.nextUrl.searchParams;
-        const sourceFilter = searchParams.get('source'); // 'web_form', 'email', or null for all
+        const sourceFilter = searchParams.get('source'); // 'web_form', 'email', 'manual', or null for all
 
         // Use service role client to bypass RLS and improve performance
         const serverClient = createServerClient();
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
         // Helper function to apply source filter to a query
         const applySourceFilter = <T extends { eq: (column: string, value: string) => any }>(query: T): T => {
-            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email' || sourceFilter === 'manual')) {
                 return query.eq('source', sourceFilter) as T;
             }
             return query;
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
             .eq('status', 'completed')
             .not('completed_at', 'is', null)
             .is('deleted_at', null);
-        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email' || sourceFilter === 'manual')) {
             completedQuery = completedQuery.eq('source', sourceFilter);
         }
         const { data: completedAssessments } = await completedQuery as { data: Array<{ created_at: string; completed_at: string | null }> | null };
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
             .in('status', ['pending', 'processing'])
             .lt('created_at', sevenDaysAgo.toISOString())
             .is('deleted_at', null);
-        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email' || sourceFilter === 'manual')) {
             overdueQuery = overdueQuery.eq('source', sourceFilter);
         }
         const { count: overdueCount } = await overdueQuery;
@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
             .from('assessments')
             .select('status, company_name')
             .is('deleted_at', null);
-        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email' || sourceFilter === 'manual')) {
             allAssessmentsQuery = allAssessmentsQuery.eq('source', sourceFilter);
         }
         const { data: allAssessments } = await allAssessmentsQuery as { data: Array<{ status: string; company_name: string }> | null };
@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
                 .gte('created_at', monthStart.toISOString())
                 .lte('created_at', monthEnd.toISOString())
                 .is('deleted_at', null);
-            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email' || sourceFilter === 'manual')) {
                 monthlyQuery = monthlyQuery.eq('source', sourceFilter);
             }
             monthlyQueries.push(monthlyQuery);
@@ -302,7 +302,7 @@ export async function GET(request: NextRequest) {
                 .gte('completed_at', monthStart.toISOString())
                 .lte('completed_at', monthEnd.toISOString())
                 .is('deleted_at', null);
-            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email' || sourceFilter === 'manual')) {
                 completionQuery = completionQuery.eq('source', sourceFilter);
             }
             completionQueries.push(completionQuery);
@@ -381,7 +381,7 @@ export async function GET(request: NextRequest) {
             .is('deleted_at', null)
             .order('created_at', { ascending: false })
             .limit(20);
-        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email' || sourceFilter === 'manual')) {
             activityQuery = activityQuery.eq('source', sourceFilter);
         }
         const { data: recentActivity } = await activityQuery as { data: Array<{ id: string; company_name: string; status: string; created_at: string; assessment_type: string | null }> | null };
@@ -394,6 +394,39 @@ export async function GET(request: NextRequest) {
             timestamp: assessment.created_at,
         }));
 
+        // Get breakdown by source for this month (only when sourceFilter is null/all)
+        let sourceBreakdown: { web_form: number; email: number; manual: number } | null = null;
+        if (!sourceFilter) {
+            const [webFormCount, emailCount, manualCount] = await Promise.all([
+                serverClient
+                    .from('assessments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('source', 'web_form')
+                    .gte('created_at', startOfCurrentMonth.toISOString())
+                    .lte('created_at', endOfCurrentMonth.toISOString())
+                    .is('deleted_at', null),
+                serverClient
+                    .from('assessments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('source', 'email')
+                    .gte('created_at', startOfCurrentMonth.toISOString())
+                    .lte('created_at', endOfCurrentMonth.toISOString())
+                    .is('deleted_at', null),
+                serverClient
+                    .from('assessments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('source', 'manual')
+                    .gte('created_at', startOfCurrentMonth.toISOString())
+                    .lte('created_at', endOfCurrentMonth.toISOString())
+                    .is('deleted_at', null),
+            ]);
+            sourceBreakdown = {
+                web_form: webFormCount.count || 0,
+                email: emailCount.count || 0,
+                manual: manualCount.count || 0,
+            };
+        }
+
         const responseData = {
             // Basic stats
             totalThisMonth: totalThisMonth || 0,
@@ -404,6 +437,9 @@ export async function GET(request: NextRequest) {
             averageDaysToComplete: Math.round(averageDaysToComplete * 10) / 10,
             revenueThisMonth: revenueThisMonth,
             overdue: overdueCount || 0,
+
+            // Source breakdown (only when viewing all sources)
+            sourceBreakdown,
 
             // Charts data
             statusBreakdown,

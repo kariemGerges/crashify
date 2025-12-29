@@ -22,6 +22,7 @@ import type { Json } from '@/server/lib/types/database.types';
 import Image from 'next/image';
 import { useToast } from '../Toast';
 import { PDFReportActions } from '../Assessment/PDFReportActions';
+import { EstimateEditor } from './EstimateEditor';
 
 
 interface OwnerInfo {
@@ -777,6 +778,20 @@ export const AssessmentDetail: React.FC<AssessmentDetailProps> = ({
                                     )}
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                            {/* Estimate Editor Section */}
+                    <div className="mt-6 pt-6 border-t border-gray-800">
+                        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+                            <DollarSign className="w-5 h-5 text-amber-500" />
+                            Estimate Editor
+                        </h3>
+                        <div className="bg-black/30 border border-gray-800 rounded-lg p-4">
+                            <EstimateEditor 
+                                assessmentId={assessment.id}
+                                onUpdate={loadAssessment}
+                            />
                         </div>
                     </div>
 

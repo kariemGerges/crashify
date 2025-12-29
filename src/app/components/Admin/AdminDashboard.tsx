@@ -21,7 +21,6 @@ import {
     MessageSquare,
     X,
     Receipt,
-    RefreshCw,
 } from 'lucide-react';
 import { AddUserModal } from '@/app/components/Admin/AddUserModal';
 import { api } from '@/app/actions/getUser';
@@ -118,14 +117,16 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     // State for the tokens error
     const [tokensError, setTokensError] = useState('');
 
-    // Email processing state
-    const [processingEmails, setProcessingEmails] = useState(false);
-    // State for the email process result
-    const [emailProcessResult, setEmailProcessResult] = useState<{
-        processed: number;
-        created: number;
-        errors: Array<{ emailId: string; error: string }>;
-    } | null>(null);
+
+    // Cache for assessments analytics data (keyed by sourceFilter)
+    const [assessmentsAnalyticsCache, setAssessmentsAnalyticsCache] = useState<Record<string, any>>({});
+    const [assessmentsAnalyticsLoading, setAssessmentsAnalyticsLoading] = useState(false);
+    const [assessmentsAnalyticsLastRefreshed, setAssessmentsAnalyticsLastRefreshed] = useState<Record<string, Date>>({});
+
+    // Cache for complaints analytics data
+    const [complaintsAnalyticsCache, setComplaintsAnalyticsCache] = useState<any>(null);
+    const [complaintsAnalyticsLoading, setComplaintsAnalyticsLoading] = useState(false);
+    const [complaintsAnalyticsLastRefreshed, setComplaintsAnalyticsLastRefreshed] = useState<Date | null>(null);
 
     // Get the color of the role badge
     const getRoleBadgeColor = (role: Role) => {
@@ -414,70 +415,75 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         toast.showSuccess('Link copied to clipboard!');
     };
 
-    // Handle the process emails action
-    const handleProcessEmails = async () => {
-        setProcessingEmails(true);
-        setEmailProcessResult(null);
 
+    // Fetch assessments analytics (with caching)
+    const fetchAssessmentsAnalytics = async (forceRefresh: boolean = false, sourceFilter: string = 'all') => {
+        const cacheKey = sourceFilter;
+        
+        // If we have cached data for this sourceFilter and not forcing refresh, don't fetch
+        if (!forceRefresh && assessmentsAnalyticsCache[cacheKey]) {
+            return;
+        }
+
+        setAssessmentsAnalyticsLoading(true);
         try {
-            // Try to process the emails
-            const response = await fetch('/api/email/process', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+            const url = new URL('/api/analytics/dashboard', window.location.origin);
+            if (sourceFilter !== 'all') {
+                url.searchParams.set('source', sourceFilter);
+            }
+            
+            const response = await fetch(url.toString(), {
                 credentials: 'include',
+                cache: forceRefresh ? 'no-store' : 'default',
+                ...(forceRefresh && {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                    },
+                }),
             });
-
-            // Get the result
+            if (!response.ok) throw new Error('Failed to fetch analytics');
             const result = await response.json();
-
-            // If the response is not ok, throw an error
-            if (!response.ok) {
-                throw new Error(
-                    result.error || result.details || 'Failed to process emails'
-                );
-            }
-
-            // Set the email process result
-            setEmailProcessResult({
-                processed: result.processed || 0,
-                created: result.created || 0,
-                errors: Array.isArray(result.errors)
-                    ? result.errors.map(
-                          (err: string | { emailId: string; error: string }) =>
-                              typeof err === 'string'
-                                  ? { emailId: 'unknown', error: err }
-                                  : err
-                      )
-                    : [],
-            });
-
-            // Show success toast
-            toast.showSuccess(
-                `Processed ${result.processed || 0} emails, created ${
-                    result.created || 0
-                } assessments`
-            );
-
-            // Refresh the stats if on the assessments tab
-            if (activeTab === 'assessments') {
-                loadStats();
-            }
-        } catch (err: unknown) {
-            // Show error toast
-            const errorMessage =
-                err instanceof Error ? err.message : 'Failed to process emails';
-            toast.showError(errorMessage);
-            // Set the email process result
-            setEmailProcessResult({
-                processed: 0,
-                created: 0,
-                errors: [{ emailId: 'system', error: errorMessage }],
-            });
+            setAssessmentsAnalyticsCache(prev => ({
+                ...prev,
+                [cacheKey]: result,
+            }));
+            setAssessmentsAnalyticsLastRefreshed(prev => ({
+                ...prev,
+                [cacheKey]: new Date(),
+            }));
+        } catch (error) {
+            console.error('Failed to fetch assessments analytics:', error);
         } finally {
-            // Set the processing emails to false
-            setProcessingEmails(false);
+            setAssessmentsAnalyticsLoading(false);
+        }
+    };
+
+    // Fetch complaints analytics (with caching)
+    const fetchComplaintsAnalytics = async (forceRefresh: boolean = false) => {
+        // If we have cached data and not forcing refresh, don't fetch
+        if (!forceRefresh && complaintsAnalyticsCache) {
+            return;
+        }
+
+        setComplaintsAnalyticsLoading(true);
+        try {
+            const response = await fetch('/api/analytics/complaints', {
+                credentials: 'include',
+                cache: forceRefresh ? 'no-store' : 'default',
+                ...(forceRefresh && {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                    },
+                }),
+            });
+            if (!response.ok) throw new Error('Failed to fetch analytics');
+            const result = await response.json();
+            setComplaintsAnalyticsCache(result);
+            setComplaintsAnalyticsLastRefreshed(new Date());
+        } catch (error) {
+            console.error('Failed to fetch complaints analytics:', error);
+        } finally {
+            setComplaintsAnalyticsLoading(false);
         }
     };
 
@@ -610,6 +616,12 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                             <EnhancedStatsOverview
                                 showAllSections={true}
                                 mainTab="assessments"
+                                cachedData={assessmentsAnalyticsCache}
+                                isLoading={assessmentsAnalyticsLoading}
+                                lastRefreshed={assessmentsAnalyticsLastRefreshed}
+                                onRefresh={(forceRefresh, sourceFilter = 'all') => 
+                                    fetchAssessmentsAnalytics(forceRefresh, sourceFilter)
+                                }
                             />
                         )}
 
@@ -617,7 +629,16 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                         {activeTab === 'claims' && <ClaimsTab />}
 
                         {/* Complaints Tab */}
-                        {activeTab === 'complaints' && <ComplaintsTab />}
+                        {activeTab === 'complaints' && (
+                            <ComplaintsTab
+                                cachedAnalytics={complaintsAnalyticsCache}
+                                isLoadingAnalytics={complaintsAnalyticsLoading}
+                                lastRefreshed={complaintsAnalyticsLastRefreshed}
+                                onRefreshAnalytics={(forceRefresh) => 
+                                    fetchComplaintsAnalytics(forceRefresh)
+                                }
+                            />
+                        )}
 
                         {/* Supplementary Requests Tab */}
                         {activeTab === 'supplementary' && (
@@ -1244,167 +1265,6 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                         {/* Settings Tab */}
                         {activeTab === 'settings' && user.role === 'admin' && (
                             <div className="space-y-6">
-                                {/* Email Processing Section */}
-                                <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-red-600 rounded-lg flex items-center justify-center">
-                                            <Mail className="w-5 h-5 text-white" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-bold text-white">
-                                                Email Processing
-                                            </h3>
-                                            <p className="text-gray-400 text-sm">
-                                                Manually trigger email
-                                                processing from
-                                                info@crashify.com.au
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="p-4 bg-black/30 rounded-lg border border-gray-800">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div>
-                                                    <p className="text-white font-medium">
-                                                        Process Unread Emails
-                                                    </p>
-                                                    <p className="text-gray-400 text-sm">
-                                                        Check for new emails and
-                                                        create assessments
-                                                        automatically
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    onClick={
-                                                        handleProcessEmails
-                                                    }
-                                                    disabled={processingEmails}
-                                                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-red-600 text-white rounded-lg hover:from-amber-600 hover:to-red-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    {processingEmails ? (
-                                                        <>
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                                            Processing...
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <RefreshCw className="w-4 h-4" />
-                                                            Process Emails
-                                                        </>
-                                                    )}
-                                                </button>
-                                            </div>
-
-                                            {emailProcessResult && (
-                                                <div
-                                                    className={`mt-4 p-4 rounded-lg border ${
-                                                        emailProcessResult
-                                                            .errors.length > 0
-                                                            ? 'bg-red-500/10 border-red-500/50'
-                                                            : 'bg-green-500/10 border-green-500/50'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-start gap-3">
-                                                        {emailProcessResult
-                                                            .errors.length >
-                                                        0 ? (
-                                                            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                                                        ) : (
-                                                            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                                                        )}
-                                                        <div className="flex-1">
-                                                            <p
-                                                                className={`font-medium mb-2 ${
-                                                                    emailProcessResult
-                                                                        .errors
-                                                                        .length >
-                                                                    0
-                                                                        ? 'text-red-400'
-                                                                        : 'text-green-400'
-                                                                }`}
-                                                            >
-                                                                Processing
-                                                                Complete
-                                                            </p>
-                                                            <div className="space-y-1 text-sm">
-                                                                <p className="text-gray-300">
-                                                                    <span className="font-medium">
-                                                                        Emails
-                                                                        Processed:
-                                                                    </span>{' '}
-                                                                    {
-                                                                        emailProcessResult.processed
-                                                                    }
-                                                                </p>
-                                                                <p className="text-gray-300">
-                                                                    <span className="font-medium">
-                                                                        Assessments
-                                                                        Created:
-                                                                    </span>{' '}
-                                                                    {
-                                                                        emailProcessResult.created
-                                                                    }
-                                                                </p>
-                                                                {emailProcessResult
-                                                                    .errors
-                                                                    .length >
-                                                                    0 && (
-                                                                    <div className="mt-2">
-                                                                        <p className="text-red-400 font-medium mb-1">
-                                                                            Errors:
-                                                                        </p>
-                                                                        <ul className="list-disc list-inside text-red-300 space-y-1">
-                                                                            {emailProcessResult.errors.map(
-                                                                                (
-                                                                                    errorItem,
-                                                                                    idx
-                                                                                ) => (
-                                                                                    <li
-                                                                                        key={
-                                                                                            idx
-                                                                                        }
-                                                                                        className="text-xs"
-                                                                                    >
-                                                                                        {errorItem.emailId &&
-                                                                                            errorItem.emailId !==
-                                                                                                'system' && (
-                                                                                                <span className="font-medium">
-                                                                                                    {
-                                                                                                        errorItem.emailId
-                                                                                                    }
-
-                                                                                                    :{' '}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        {
-                                                                                            errorItem.error
-                                                                                        }
-                                                                                    </li>
-                                                                                )
-                                                                            )}
-                                                                        </ul>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            onClick={() =>
-                                                                setEmailProcessResult(
-                                                                    null
-                                                                )
-                                                            }
-                                                            className="text-gray-400 hover:text-white transition-colors"
-                                                        >
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
                                 {/* System Settings Section */}
                                 <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
                                     <h3 className="text-xl font-bold text-white mb-4">

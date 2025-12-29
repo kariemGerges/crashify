@@ -1,0 +1,37 @@
+# Feature Gap Analysis: Crashify vs IQ Controls Assessing Management
+
+## Executive Summary
+
+Crashify has a strong foundation with AI-powered features. However, there are specific gaps in:
+- Interactive estimate adjustment
+- Repairer portal integration  
+- Real-time collaboration
+
+## Key Gaps & Recommendations
+
+### 1. Interactive Estimate Editor (Priority 1)
+**Gap:** No UI for editing line items
+**Impact:** Very High
+**Solution:** Build interactive editor with inline editing, real-time calculations, item-level comments
+
+### 2. Repairer Portal (Priority 1)
+**Gap:** No direct repairer access
+**Impact:** Very High
+**Solution:** Create repairer registration/login, dashboard, quote submission portal
+
+### 3. Real-Time Collaboration (Priority 1)
+**Gap:** No real-time updates, no activity feed
+**Impact:** Very High
+**Solution:** Implement WebSockets, activity feed, in-app notifications
+
+### 4. API Documentation (Priority 2)
+**Gap:** No Swagger/OpenAPI docs
+**Impact:** High
+**Solution:** Generate API documentation
+
+### 5. Bulk Import (Priority 2)
+**Gap:** Only single file processing
+**Impact:** High
+**Solution:** Multi-file upload with batch processing
+
+See full document for detailed implementation plans, database schemas, and roadmap.
