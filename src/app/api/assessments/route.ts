@@ -12,6 +12,9 @@ import { validateAndExtractIp } from '@/server/lib/utils/security';
 import type { AssessmentFormData, Database, Json } from '@/server/lib/types/database.types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidateTag } from 'next/cache';
+import { createLogger } from '@/server/lib/utils/logger';
+
+const logger = createLogger('ASSESSMENT');
 
 type AssessmentInsert = Database['public']['Tables']['assessments']['Insert'];
 type AssessmentRow = Database['public']['Tables']['assessments']['Row'];
@@ -67,8 +70,8 @@ export async function POST(request: NextRequest) {
 
             // Auto-reject if spam score is too high
             if (spamCheck.action === 'auto_reject') {
-                console.log('[ASSESSMENT] Spam detected, auto-rejecting:', {
-                    email: formData.yourEmail,
+                logger.warn('Spam detected, auto-rejecting', {
+                    email: formData.yourEmail, // Will be sanitized by logger
                     spamScore: spamCheck.spamScore,
                     flags: spamCheck.flags,
                 });
@@ -92,7 +95,7 @@ export async function POST(request: NextRequest) {
                         insert: (values: Database['public']['Tables']['audit_logs']['Insert'][]) => Promise<unknown>;
                     }).insert([auditLogInsert]);
                 } catch (auditError) {
-                    console.error('[ASSESSMENT] Failed to log spam attempt:', auditError);
+                    logger.error('Failed to log spam attempt', auditError);
                 }
 
                 return NextResponse.json(
@@ -107,8 +110,8 @@ export async function POST(request: NextRequest) {
 
             // For manual review, will add spam score to internal notes below
             if (spamCheck.action === 'manual_review' && spamCheck.spamScore > 0) {
-                console.log('[ASSESSMENT] Manual review required:', {
-                    email: formData.yourEmail,
+                logger.info('Manual review required', {
+                    email: formData.yourEmail, // Will be sanitized by logger
                     spamScore: spamCheck.spamScore,
                     flags: spamCheck.flags,
                 });
@@ -221,7 +224,7 @@ export async function POST(request: NextRequest) {
         const assessment = data as AssessmentRow | null;
 
         if (insertError) {
-            console.error('Insert error:', insertError);
+            logger.error('Assessment insert error', insertError);
             return NextResponse.json(
                 {
                     error: 'Failed to create assessment',
@@ -264,7 +267,7 @@ export async function POST(request: NextRequest) {
                 insert: (values: Database['public']['Tables']['audit_logs']['Insert'][]) => Promise<unknown>;
             }).insert([auditLogInsert]);
         } catch (auditError) {
-            console.error('[ASSESSMENT] Failed to log assessment creation:', auditError);
+            logger.error('Failed to log assessment creation', auditError);
             // Don't fail the request if audit logging fails
         }
 
@@ -295,7 +298,7 @@ export async function POST(request: NextRequest) {
                 },
             });
         } catch (notifyError) {
-            console.error('[ASSESSMENT] Notification error (non-critical):', notifyError);
+            logger.error('Notification error (non-critical)', notifyError);
             // Don't fail the request if notifications fail
         }
 
@@ -317,7 +320,7 @@ export async function POST(request: NextRequest) {
             { status: 201 }
         );
     } catch (error) {
-        console.error('API Error:', error);
+        logger.error('API Error', error);
         return NextResponse.json(
             {
                 error: 'Internal server error',
@@ -345,6 +348,7 @@ export async function GET(request: NextRequest) {
         const status = searchParams.get('status');
         const assessmentType = searchParams.get('type');
         const companyName = searchParams.get('company');
+        const source = searchParams.get('source'); // Filter by source: 'web_form', 'email', 'phone', 'portal'
 
         // Build query
         let query = supabase
@@ -360,6 +364,7 @@ export async function GET(request: NextRequest) {
         model,
         registration,
         status,
+        source,
         created_at
       `,
                 { count: 'exact' }
@@ -371,6 +376,7 @@ export async function GET(request: NextRequest) {
         if (assessmentType) query = query.eq('assessment_type', assessmentType);
         if (companyName)
             query = query.ilike('company_name', `%${companyName}%`);
+        if (source) query = query.eq('source', source);
 
         // Apply pagination
         query = query.order('created_at', { ascending: false }).range(from, to);
@@ -397,7 +403,7 @@ export async function GET(request: NextRequest) {
             },
         });
     } catch (error) {
-        console.error('API Error:', error);
+        logger.error('API Error', error);
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 }

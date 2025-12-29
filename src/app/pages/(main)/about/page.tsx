@@ -49,7 +49,7 @@ export default function CrashifyAbout() {
                 'Comprehensive on-location inspections',
                 'Immediate results and clarity',
             ],
-            color: 'from-purple-500 to-pink-500',
+            color: 'from-sky-500 to-pink-500',
             delay: '100',
         },
         {
@@ -132,8 +132,8 @@ export default function CrashifyAbout() {
                     {/* · "Smart automation meets human expertise" */}
                     <div className="inline-block mb-6">
                         <div className="relative">
-                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 blur-3xl opacity-50 animate-pulse" />
-                            {/* <h1 className="relative text-7xl md:text-8xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-sky-500 blur-3xl opacity-50 animate-pulse" />
+                            {/* <h1 className="relative text-7xl md:text-8xl font-black bg-gradient-to-r from-blue-400 via-sky-400 to-pink-400 bg-clip-text text-transparent">
                                 Crashify
                             </h1> */}
                             <Logo size={260} />
@@ -173,7 +173,7 @@ export default function CrashifyAbout() {
                 {/* Mission Statement */}
                 <div className="max-w-5xl mx-auto mb-20">
                     <div className="relative p-8 md:p-12 bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl hover:shadow-blue-500/20 transition-all duration-500 group">
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-3xl opacity-0 group-hover:opacity-20 blur transition-all duration-500" />
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-sky-500 to-pink-500 rounded-3xl opacity-0 group-hover:opacity-20 blur transition-all duration-500" />
                         <div className="relative">
                             <div className="flex items-center gap-3 mb-6">
                                 <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-500 rounded-2xl flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-500">
@@ -330,7 +330,7 @@ export default function CrashifyAbout() {
                         {/* Regulatory Frameworks */}
                         <div className="relative p-8 md:p-12 bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-xl rounded-3xl border border-white/10">
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-500 rounded-2xl flex items-center justify-center">
+                                <div className="w-12 h-12 bg-gradient-to-br from-sky-400 to-pink-500 rounded-2xl flex items-center justify-center">
                                     <Scale className="w-6 h-6" />
                                 </div>
                                 <h3 className="text-2xl font-bold">

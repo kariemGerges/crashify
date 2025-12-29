@@ -14,7 +14,8 @@ type EmailQuarantineUpdate =
 
 export interface QuarantineEmailParams {
     email: ParsedMail;
-    emailUid: number;
+    emailUid?: number; // IMAP UID (legacy)
+    emailId?: string; // Graph API email ID (OAuth2)
     spamScore: number;
     spamFlags: string[];
     reason: string;
@@ -27,7 +28,7 @@ export async function quarantineEmail(
     params: QuarantineEmailParams
 ): Promise<string> {
     const supabase = createServerClient();
-    const { email, emailUid, spamScore, spamFlags, reason } = params;
+    const { email, emailUid, emailId, spamScore, spamFlags, reason } = params;
 
     // Convert Headers object (Map) to plain object for JSON serialization
     // HeaderValue can be string, string[], Date, AddressObject, StructuredHeader, etc.
@@ -55,7 +56,8 @@ export async function quarantineEmail(
         spam_score: spamScore,
         spam_flags: spamFlags,
         reason,
-        email_uid: emailUid,
+        email_uid: emailUid || null, // IMAP UID (legacy)
+        email_id: emailId || null, // Graph API email ID (OAuth2)
         attachments_count: email.attachments?.length || 0,
         raw_email_data: {
             headers: headersObj as Json,
@@ -90,8 +92,9 @@ export async function quarantineEmail(
         throw new Error('Failed to quarantine email: No data returned');
     }
 
+    const emailIdentifier = emailId || emailUid?.toString() || 'unknown';
     console.log(
-        `[EmailQuarantine] Email ${emailUid} quarantined with ID: ${data.id}`
+        `[EmailQuarantine] Email ${emailIdentifier} quarantined with ID: ${data.id}`
     );
     return data.id;
 }

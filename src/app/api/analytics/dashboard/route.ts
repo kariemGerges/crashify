@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 // Cache for 30 minutes (1800 seconds)
 export const revalidate = 1800;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         // Check authentication
         const user = await getSession();
@@ -25,12 +25,24 @@ export async function GET() {
             );
         }
 
+        // Get source filter from query params
+        const searchParams = request.nextUrl.searchParams;
+        const sourceFilter = searchParams.get('source'); // 'web_form', 'email', or null for all
+
         // Use service role client to bypass RLS and improve performance
         const serverClient = createServerClient();
 
         const now = new Date();
         const startOfCurrentMonth = startOfMonth(now);
         const endOfCurrentMonth = endOfMonth(now);
+
+        // Helper function to apply source filter to a query
+        const applySourceFilter = <T extends { eq: (column: string, value: string) => any }>(query: T): T => {
+            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+                return query.eq('source', sourceFilter) as T;
+            }
+            return query;
+        };
 
         // Run all count queries in parallel for better performance
         const [
@@ -40,30 +52,38 @@ export async function GET() {
             { count: completedCount },
         ] = await Promise.all([
             // REQ-37: Total assessments this month
-            serverClient
-                .from('assessments')
-                .select('*', { count: 'exact', head: true })
-                .gte('created_at', startOfCurrentMonth.toISOString())
-                .lte('created_at', endOfCurrentMonth.toISOString())
-                .is('deleted_at', null),
+            applySourceFilter(
+                serverClient
+                    .from('assessments')
+                    .select('*', { count: 'exact', head: true })
+                    .gte('created_at', startOfCurrentMonth.toISOString())
+                    .lte('created_at', endOfCurrentMonth.toISOString())
+                    .is('deleted_at', null)
+            ),
             // REQ-38: Pending count
-            serverClient
-                .from('assessments')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'pending')
-                .is('deleted_at', null),
+            applySourceFilter(
+                serverClient
+                    .from('assessments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending')
+                    .is('deleted_at', null)
+            ),
             // REQ-39: In progress count
-            serverClient
-                .from('assessments')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'processing')
-                .is('deleted_at', null),
+            applySourceFilter(
+                serverClient
+                    .from('assessments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'processing')
+                    .is('deleted_at', null)
+            ),
             // REQ-40: Completed count
-            serverClient
-                .from('assessments')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'completed')
-                .is('deleted_at', null),
+            applySourceFilter(
+                serverClient
+                    .from('assessments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'completed')
+                    .is('deleted_at', null)
+            ),
         ]);
 
         // REQ-41: Completion rate percentage
@@ -71,12 +91,16 @@ export async function GET() {
         const completionRate = total > 0 ? ((completedCount || 0) / total) * 100 : 0;
 
         // REQ-42: Average days to complete
-        const { data: completedAssessments } = await serverClient
+        let completedQuery = serverClient
             .from('assessments')
             .select('created_at, completed_at')
             .eq('status', 'completed')
             .not('completed_at', 'is', null)
-            .is('deleted_at', null) as { data: Array<{ created_at: string; completed_at: string | null }> | null };
+            .is('deleted_at', null);
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+            completedQuery = completedQuery.eq('source', sourceFilter);
+        }
+        const { data: completedAssessments } = await completedQuery as { data: Array<{ created_at: string; completed_at: string | null }> | null };
 
         let averageDaysToComplete = 0;
         if (completedAssessments && completedAssessments.length > 0) {
@@ -126,19 +150,27 @@ export async function GET() {
         // REQ-44: Overdue count (assessments older than 7 days in pending/processing)
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        const { count: overdueCount } = await serverClient
+        let overdueQuery = serverClient
             .from('assessments')
             .select('*', { count: 'exact', head: true })
             .in('status', ['pending', 'processing'])
             .lt('created_at', sevenDaysAgo.toISOString())
             .is('deleted_at', null);
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+            overdueQuery = overdueQuery.eq('source', sourceFilter);
+        }
+        const { count: overdueCount } = await overdueQuery;
 
         // REQ-45: Pie chart - assessments by status
         // Get all assessments once and use for both status breakdown and top insurers
-        const { data: allAssessments } = await serverClient
+        let allAssessmentsQuery = serverClient
             .from('assessments')
             .select('status, company_name')
-            .is('deleted_at', null) as { data: Array<{ status: string; company_name: string }> | null };
+            .is('deleted_at', null);
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+            allAssessmentsQuery = allAssessmentsQuery.eq('source', sourceFilter);
+        }
+        const { data: allAssessments } = await allAssessmentsQuery as { data: Array<{ status: string; company_name: string }> | null };
 
         const statusBreakdown = {
             pending: 0,
@@ -162,14 +194,16 @@ export async function GET() {
         for (let i = 11; i >= 0; i--) {
             const monthStart = startOfMonth(subMonths(now, i));
             const monthEnd = endOfMonth(subMonths(now, i));
-            monthlyQueries.push(
-                serverClient
-                    .from('assessments')
-                    .select('*', { count: 'exact', head: true })
-                    .gte('created_at', monthStart.toISOString())
-                    .lte('created_at', monthEnd.toISOString())
-                    .is('deleted_at', null)
-            );
+            let monthlyQuery = serverClient
+                .from('assessments')
+                .select('*', { count: 'exact', head: true })
+                .gte('created_at', monthStart.toISOString())
+                .lte('created_at', monthEnd.toISOString())
+                .is('deleted_at', null);
+            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+                monthlyQuery = monthlyQuery.eq('source', sourceFilter);
+            }
+            monthlyQueries.push(monthlyQuery);
         }
         const monthlyResults = await Promise.all(monthlyQueries);
         const monthlyTrend = monthlyResults.map((result, index) => {
@@ -199,10 +233,14 @@ export async function GET() {
 
         // REQ-48: Bar chart - top repairers
         // Extract repairer information from assessments metadata or company_name
-        const { data: repairerAssessments } = await (
+        let repairerQuery = (
             serverClient.from('assessments') as unknown as {
                 select: (columns: string) => {
-                    is: (column: string, value: null) => Promise<{
+                    is: (column: string, value: null) => {
+                        eq?: (column: string, value: string) => Promise<{
+                            data: Array<{ company_name: string; metadata: Json | null }> | null;
+                        }>;
+                    } & Promise<{
                         data: Array<{ company_name: string; metadata: Json | null }> | null;
                     }>;
                 };
@@ -210,6 +248,10 @@ export async function GET() {
         )
             .select('company_name, metadata')
             .is('deleted_at', null);
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+            repairerQuery = repairerQuery.eq('source', sourceFilter) as typeof repairerQuery;
+        }
+        const { data: repairerAssessments } = await repairerQuery;
 
         const repairerCounts: Record<string, number> = {};
         if (repairerAssessments) {
@@ -244,16 +286,18 @@ export async function GET() {
         for (let i = 11; i >= 0; i--) {
             const monthStart = startOfMonth(subMonths(now, i));
             const monthEnd = endOfMonth(subMonths(now, i));
-            completionQueries.push(
-                serverClient
-                    .from('assessments')
-                    .select('created_at, completed_at')
-                    .eq('status', 'completed')
-                    .not('completed_at', 'is', null)
-                    .gte('completed_at', monthStart.toISOString())
-                    .lte('completed_at', monthEnd.toISOString())
-                    .is('deleted_at', null)
-            );
+            let completionQuery = serverClient
+                .from('assessments')
+                .select('created_at, completed_at')
+                .eq('status', 'completed')
+                .not('completed_at', 'is', null)
+                .gte('completed_at', monthStart.toISOString())
+                .lte('completed_at', monthEnd.toISOString())
+                .is('deleted_at', null);
+            if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+                completionQuery = completionQuery.eq('source', sourceFilter);
+            }
+            completionQueries.push(completionQuery);
         }
         const completionResults = await Promise.all(completionQueries) as Array<{ data: Array<{ created_at: string; completed_at: string | null }> | null }>;
         const completionTimeByMonth = completionResults.map((result, index) => {
@@ -323,12 +367,16 @@ export async function GET() {
         }
 
         // REQ-51: Live activity feed (recent assessments)
-        const { data: recentActivity } = await serverClient
+        let activityQuery = serverClient
             .from('assessments')
             .select('id, company_name, status, created_at, assessment_type')
             .is('deleted_at', null)
             .order('created_at', { ascending: false })
-            .limit(20) as { data: Array<{ id: string; company_name: string; status: string; created_at: string; assessment_type: string | null }> | null };
+            .limit(20);
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
+            activityQuery = activityQuery.eq('source', sourceFilter);
+        }
+        const { data: recentActivity } = await activityQuery as { data: Array<{ id: string; company_name: string; status: string; created_at: string; assessment_type: string | null }> | null };
 
         const activityFeed = (recentActivity || []).map((assessment) => ({
             id: assessment.id,

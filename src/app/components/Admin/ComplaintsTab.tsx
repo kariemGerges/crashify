@@ -1,11 +1,26 @@
 // =============================================
 // FILE: app/components/Admin/ComplaintsTab.tsx
-// Complaints Dashboard Component (REQ-65)
+// Complaints Dashboard Component - Redesigned
 // =============================================
 
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import {
+    PieChart,
+    Pie,
+    Cell,
+    LineChart,
+    Line,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
+    ResponsiveContainer,
+} from 'recharts';
 import {
     AlertCircle,
     CheckCircle,
@@ -14,14 +29,21 @@ import {
     FileText,
     Loader2,
     Search,
-    Filter,
     X,
     Send,
     Edit,
-    Eye,
+    TrendingUp,
+    ThumbsUp,
+    ThumbsDown,
+    Award,
+    BarChart3,
+    Activity,
+    RefreshCw,
 } from 'lucide-react';
 import { useToast } from '../Toast';
+import { format } from 'date-fns';
 
+// Complaint interface
 interface Complaint {
     id: string;
     complaint_number: string;
@@ -38,6 +60,7 @@ interface Complaint {
     assessment_id: string | null;
 }
 
+// Complaint attachment interface
 interface ComplaintAttachment {
     id: string;
     file_name: string;
@@ -47,6 +70,7 @@ interface ComplaintAttachment {
     created_at: string;
 }
 
+// Complaint stats interface
 interface ComplaintStats {
     total: number;
     active: number;
@@ -55,33 +79,92 @@ interface ComplaintStats {
     complaintRate: number | null;
 }
 
+// Complaints analytics interface
+interface ComplaintsAnalytics {
+    totalThisMonth: number;
+    total: number;
+    positive: number;
+    negative: number;
+    satisfactionScore: number;
+    resolutionRate: number;
+    averageResolutionTime: number;
+    overdue: number;
+    statusBreakdown: {
+        new: number;
+        under_investigation: number;
+        resolved: number;
+        closed: number;
+    };
+    monthlyTrend: Array<{ month: string; count: number }>;
+    resolutionTrend: Array<{ month: string; resolved: number; total: number }>;
+    topCategories: Array<{ name: string; count: number }>;
+    priorityBreakdown: {
+        critical: number;
+        high: number;
+        medium: number;
+        low: number;
+    };
+    activityFeed: Array<{
+        id: string;
+        type: string;
+        description: string;
+        status: string;
+        timestamp: string;
+    }>;
+}
+
+// Colors for the charts
+const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#0ea5e9'];
+const SENTIMENT_COLORS = {
+    positive: '#10b981',
+    negative: '#ef4444',
+};
+
+// Complaints tab component
 export const ComplaintsTab: React.FC = () => {
     const toast = useToast();
     const [complaints, setComplaints] = useState<Complaint[]>([]);
+    // State for the stats
     const [stats, setStats] = useState<ComplaintStats | null>(null);
+    const [analytics, setAnalytics] = useState<ComplaintsAnalytics | null>(null);
+    // State for the loading of the complaints
     const [loading, setLoading] = useState(true);
+    // State for the loading of the analytics
+    const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+    // State for the selected complaint
     const [selectedComplaint, setSelectedComplaint] =
         useState<Complaint | null>(null);
+    // State for the selected attachments
     const [selectedAttachments, setSelectedAttachments] = useState<ComplaintAttachment[]>([]);
+    // State for the show detail modal
     const [showDetailModal, setShowDetailModal] = useState(false);
+    // State for the show message modal
     const [showMessageModal, setShowMessageModal] = useState(false);
+    // State for the message
     const [message, setMessage] = useState('');
+    // State for the internal notes
     const [isInternal, setIsInternal] = useState(false);
     const [internalNotes, setInternalNotes] = useState('');
+    // State for the filters
     const [filters, setFilters] = useState({
         status: '',
         priority: '',
         category: '',
         search: '',
     });
+    // State for the page
     const [page, setPage] = useState(1);
+    // State for the total pages of the complaints
     const [totalPages, setTotalPages] = useState(1);
 
+    // Fetch complaints, stats, and analytics when the page or filters change
     useEffect(() => {
         fetchComplaints();
         fetchStats();
+        fetchAnalytics();
     }, [page, filters]);
 
+    // Fetch complaints
     const fetchComplaints = async () => {
         setLoading(true);
         try {
@@ -108,6 +191,7 @@ export const ComplaintsTab: React.FC = () => {
         }
     };
 
+    // Fetch stats
     const fetchStats = async () => {
         try {
             const response = await fetch('/api/complaints/stats');
@@ -120,6 +204,24 @@ export const ComplaintsTab: React.FC = () => {
         }
     };
 
+    // Fetch analytics
+    const fetchAnalytics = async () => {
+        setLoadingAnalytics(true);
+        try {
+            const response = await fetch('/api/analytics/complaints', {
+                credentials: 'include',
+            });
+            if (!response.ok) throw new Error('Failed to fetch analytics');
+            const data = await response.json();
+            setAnalytics(data);
+        } catch (error) {
+            console.error('Failed to fetch complaints analytics:', error);
+        } finally {
+            setLoadingAnalytics(false);
+        }
+    };
+
+    // Fetch complaint detail
     const fetchComplaintDetail = async (id: string) => {
         try {
             const response = await fetch(`/api/complaints/${id}`);
@@ -127,8 +229,6 @@ export const ComplaintsTab: React.FC = () => {
                 throw new Error('Failed to fetch complaint details');
 
             const data = await response.json();
-            console.log('[ADMIN] Complaint detail data:', data);
-            console.log('[ADMIN] Attachments:', data.attachments);
             setSelectedComplaint(data.complaint);
             setInternalNotes(data.complaint.internal_notes || '');
             setSelectedAttachments(data.attachments || []);
@@ -139,6 +239,7 @@ export const ComplaintsTab: React.FC = () => {
         }
     };
 
+    // Update complaint status
     const updateComplaintStatus = async (id: string, status: string) => {
         try {
             const csrfResponse = await fetch('/api/csrf-token', {
@@ -160,6 +261,7 @@ export const ComplaintsTab: React.FC = () => {
 
             toast.showSuccess('Status updated successfully');
             fetchComplaints();
+            fetchAnalytics();
             if (selectedComplaint?.id === id) {
                 fetchComplaintDetail(id);
             }
@@ -169,6 +271,7 @@ export const ComplaintsTab: React.FC = () => {
         }
     };
 
+    // Save internal notes
     const saveInternalNotes = async () => {
         if (!selectedComplaint) return;
 
@@ -200,6 +303,7 @@ export const ComplaintsTab: React.FC = () => {
         }
     };
 
+    // Send message
     const sendMessage = async () => {
         if (!selectedComplaint || !message.trim()) return;
 
@@ -238,6 +342,7 @@ export const ComplaintsTab: React.FC = () => {
         }
     };
 
+    // Get status color
     const getStatusColor = (status: string): string => {
         switch (status) {
             case 'new':
@@ -253,6 +358,7 @@ export const ComplaintsTab: React.FC = () => {
         }
     };
 
+    // Get priority color
     const getPriorityColor = (priority: string): string => {
         switch (priority) {
             case 'critical':
@@ -268,6 +374,21 @@ export const ComplaintsTab: React.FC = () => {
         }
     };
 
+    // Get score color
+    const getScoreColor = (score: number) => {
+        if (score >= 80) return 'text-green-500';
+        if (score >= 60) return 'text-yellow-500';
+        return 'text-red-500';
+    };
+
+    // Get score background color
+    const getScoreBgColor = (score: number) => {
+        if (score >= 80) return 'bg-green-500/10 border-green-500/50';
+        if (score >= 60) return 'bg-yellow-500/10 border-yellow-500/50';
+        return 'bg-red-500/10 border-red-500/50';
+    };
+
+    // Clear filters
     const clearFilters = () => {
         setFilters({
             status: '',
@@ -278,43 +399,470 @@ export const ComplaintsTab: React.FC = () => {
         setPage(1);
     };
 
+    // Prepare status chart data
+    const statusChartData = analytics
+        ? [
+              { name: 'New', value: analytics.statusBreakdown.new },
+              {
+                  name: 'Under Investigation',
+                  value: analytics.statusBreakdown.under_investigation,
+              },
+              { name: 'Resolved', value: analytics.statusBreakdown.resolved },
+              { name: 'Closed', value: analytics.statusBreakdown.closed },
+          ]
+        : [];
+
+    // Prepare sentiment chart data
+    const sentimentChartData = analytics
+        ? [
+              {
+                  name: 'Positive',
+                  value: analytics.positive,
+                  color: SENTIMENT_COLORS.positive,
+              },
+              {
+                  name: 'Negative',
+                  value: analytics.negative,
+                  color: SENTIMENT_COLORS.negative,
+              },
+          ]
+        : [];
+
+    // Prepare priority chart data
+        const priorityChartData = analytics
+        ? [
+              { name: 'Critical', value: analytics.priorityBreakdown.critical },
+              { name: 'High', value: analytics.priorityBreakdown.high },
+              { name: 'Medium', value: analytics.priorityBreakdown.medium },
+              { name: 'Low', value: analytics.priorityBreakdown.low },
+          ]
+        : [];
+
+    // Render the component
     return (
         <div className="space-y-6">
-            {/* Stats Overview */}
-            {stats && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-4">
-                        <p className="text-sm text-gray-400 mb-1">
+            {/* Alert banner for overdue items */}
+            {analytics && analytics.overdue > 0 && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-500" />
+                        <div>
+                            <p className="text-white font-semibold">
+                                Overdue Complaints Alert
+                            </p>
+                            <p className="text-gray-400 text-sm">
+                                {analytics.overdue} complaint
+                                {analytics.overdue !== 1 ? 's' : ''}{' '}
+                                {analytics.overdue !== 1 ? 'are' : 'is'} overdue
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={fetchAnalytics}
+                        className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                        title="Refresh Analytics"
+                    >
+                        <RefreshCw className="w-4 h-4 text-red-500" />
+                    </button>
+                </div>
+            )}
+
+            {/* Key Metrics Cards */}
+            {analytics && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Satisfaction Score */}
+                    <div
+                        className={`bg-gray-900/50 border rounded-xl p-5 ${getScoreBgColor(
+                            analytics.satisfactionScore
+                        )}`}
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <Award
+                                className={`w-6 h-6 ${getScoreColor(
+                                    analytics.satisfactionScore
+                                )}`}
+                            />
+                            <span className="text-xs text-gray-400">
+                                Score
+                            </span>
+                        </div>
+                        <p
+                            className={`text-3xl font-bold mb-1 ${getScoreColor(
+                                analytics.satisfactionScore
+                            )}`}
+                        >
+                            {analytics.satisfactionScore}/100
+                        </p>
+                        <p className="text-sm text-gray-400">
+                            Satisfaction Score
+                        </p>
+                    </div>
+
+                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-2">
+                            <FileText className="w-6 h-6 text-amber-500" />
+                            <span className="text-xs text-gray-400">
+                                This Month
+                            </span>
+                        </div>
+                        <p className="text-3xl font-bold text-white mb-1">
+                            {analytics.totalThisMonth}
+                        </p>
+                        <p className="text-sm text-gray-400">
                             Total Complaints
                         </p>
-                        <p className="text-2xl font-bold text-white">
-                            {stats.total}
+                    </div>
+
+                    <div className="bg-gray-900/50 border border-green-500/20 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-2">
+                            <ThumbsUp className="w-6 h-6 text-green-500" />
+                            <span className="text-xs text-gray-400">
+                                Resolved
+                            </span>
+                        </div>
+                        <p className="text-3xl font-bold text-white mb-1">
+                            {analytics.positive}
+                        </p>
+                        <p className="text-sm text-gray-400">
+                            Positive (Resolved/Closed)
                         </p>
                     </div>
-                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-4">
-                        <p className="text-sm text-gray-400 mb-1">Active</p>
-                        <p className="text-2xl font-bold text-yellow-500">
-                            {stats.active}
+
+                    <div className="bg-gray-900/50 border border-red-500/20 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-2">
+                            <ThumbsDown className="w-6 h-6 text-red-500" />
+                            <span className="text-xs text-gray-400">Active</span>
+                        </div>
+                        <p className="text-3xl font-bold text-white mb-1">
+                            {analytics.negative}
+                        </p>
+                        <p className="text-sm text-gray-400">
+                            Negative (Active Issues)
                         </p>
                     </div>
-                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-4">
-                        <p className="text-sm text-gray-400 mb-1">Overdue</p>
-                        <p className="text-2xl font-bold text-red-500">
-                            {stats.overdue}
+                </div>
+            )}
+
+            {/* Secondary Metrics */}
+            {analytics && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-2">
+                            <CheckCircle className="w-6 h-6 text-green-500" />
+                            <span className="text-xs text-gray-400">Rate</span>
+                        </div>
+                        <p className="text-3xl font-bold text-white mb-1">
+                            {analytics.resolutionRate.toFixed(1)}%
+                        </p>
+                        <p className="text-sm text-gray-400">Resolution Rate</p>
+                    </div>
+
+                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-2">
+                            <Clock className="w-6 h-6 text-blue-500" />
+                            <span className="text-xs text-gray-400">
+                                Average
+                            </span>
+                        </div>
+                        <p className="text-3xl font-bold text-white mb-1">
+                            {analytics.averageResolutionTime.toFixed(1)}
+                        </p>
+                        <p className="text-sm text-gray-400">Days to Resolve</p>
+                    </div>
+
+                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-2">
+                            <TrendingUp className="w-6 h-6 text-green-500" />
+                            <span className="text-xs text-gray-400">Total</span>
+                        </div>
+                        <p className="text-3xl font-bold text-white mb-1">
+                            {analytics.total}
+                        </p>
+                        <p className="text-sm text-gray-400">
+                            All Time Complaints
                         </p>
                     </div>
-                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-4">
-                        <p className="text-sm text-gray-400 mb-1">
-                            Avg Resolution
-                        </p>
-                        <p className="text-2xl font-bold text-white">
-                            {stats.averageResolutionTime
-                                ? `${Math.round(
-                                      stats.averageResolutionTime
-                                  )} days`
-                                : 'N/A'}
-                        </p>
+                </div>
+            )}
+
+            {/* Charts Section - Always Visible */}
+            {analytics && !loadingAnalytics && (
+                <div className="space-y-6">
+                    {/* Status Distribution Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Pie chart - Positive vs Negative */}
+                        <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5 text-amber-500" />
+                                Positive vs Negative Complaints
+                            </h3>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <PieChart>
+                                    <Pie
+                                        data={sentimentChartData}
+                                        cx="50%"
+                                        cy="50%"
+                                        labelLine={false}
+                                        label={({ name, percent }) =>
+                                            `${name} ${
+                                                percent
+                                                    ? (percent * 100).toFixed(0)
+                                                    : 0
+                                            }%`
+                                        }
+                                        outerRadius={100}
+                                        fill="#8884d8"
+                                        dataKey="value"
+                                    >
+                                        {sentimentChartData.map(
+                                            (entry, index) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={entry.color}
+                                                />
+                                            )
+                                        )}
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        {/* Pie chart - Complaints by status */}
+                        <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5 text-amber-500" />
+                                Complaints by Status
+                            </h3>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <PieChart>
+                                    <Pie
+                                        data={statusChartData}
+                                        cx="50%"
+                                        cy="50%"
+                                        labelLine={false}
+                                        label={({ name, percent }) =>
+                                            `${name} ${
+                                                percent
+                                                    ? (percent * 100).toFixed(0)
+                                                    : 0
+                                            }%`
+                                        }
+                                        outerRadius={100}
+                                        fill="#8884d8"
+                                        dataKey="value"
+                                    >
+                                        {statusChartData.map((entry, index) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={
+                                                    COLORS[
+                                                        index % COLORS.length
+                                                    ]
+                                                }
+                                            />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
                     </div>
+
+                    {/* Trends Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Line graph - monthly volume trend */}
+                        <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <TrendingUp className="w-5 h-5 text-amber-500" />
+                                Monthly Complaint Trend
+                            </h3>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <LineChart data={analytics.monthlyTrend}>
+                                    <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        stroke="#374151"
+                                    />
+                                    <XAxis
+                                        dataKey="month"
+                                        stroke="#9ca3af"
+                                        angle={-45}
+                                        textAnchor="end"
+                                        height={100}
+                                    />
+                                    <YAxis stroke="#9ca3af" />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: '#1f2937',
+                                            border: '1px solid #374151',
+                                            borderRadius: '8px',
+                                        }}
+                                    />
+                                    <Legend />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="count"
+                                        stroke="#f59e0b"
+                                        strokeWidth={2}
+                                        name="Complaints"
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        {/* Line graph - resolution trend */}
+                        <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <TrendingUp className="w-5 h-5 text-amber-500" />
+                                Monthly Resolution Trend
+                            </h3>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <LineChart data={analytics.resolutionTrend}>
+                                    <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        stroke="#374151"
+                                    />
+                                    <XAxis
+                                        dataKey="month"
+                                        stroke="#9ca3af"
+                                        angle={-45}
+                                        textAnchor="end"
+                                        height={100}
+                                    />
+                                    <YAxis stroke="#9ca3af" />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: '#1f2937',
+                                            border: '1px solid #374151',
+                                            borderRadius: '8px',
+                                        }}
+                                    />
+                                    <Legend />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="resolved"
+                                        stroke="#10b981"
+                                        strokeWidth={2}
+                                        name="Resolved"
+                                    />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="total"
+                                        stroke="#ef4444"
+                                        strokeWidth={2}
+                                        name="Total"
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Category and Priority Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Bar chart - top categories */}
+                        <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5 text-amber-500" />
+                                Top Complaint Categories
+                            </h3>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={analytics.topCategories}>
+                                    <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        stroke="#374151"
+                                    />
+                                    <XAxis
+                                        dataKey="name"
+                                        stroke="#9ca3af"
+                                        angle={-45}
+                                        textAnchor="end"
+                                        height={100}
+                                        tickFormatter={value =>
+                                            value.replace(/_/g, ' ')
+                                        }
+                                    />
+                                    <YAxis stroke="#9ca3af" />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: '#1f2937',
+                                            border: '1px solid #374151',
+                                            borderRadius: '8px',
+                                        }}
+                                    />
+                                    <Bar dataKey="count" fill="#f59e0b" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        {/* Bar chart - complaints by priority */}
+                        <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5 text-amber-500" />
+                                Complaints by Priority
+                            </h3>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={priorityChartData}>
+                                    <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        stroke="#374151"
+                                    />
+                                    <XAxis dataKey="name" stroke="#9ca3af" />
+                                    <YAxis stroke="#9ca3af" />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: '#1f2937',
+                                            border: '1px solid #374151',
+                                            borderRadius: '8px',
+                                        }}
+                                    />
+                                    <Bar dataKey="value" fill="#3b82f6" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Status Breakdown Matrix */}
+                    <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-amber-500" />
+                            Status Breakdown Matrix
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-black/30 border border-blue-500/30 rounded-lg p-4 text-center">
+                                <p className="text-3xl font-bold text-blue-400 mb-1">
+                                    {analytics.statusBreakdown.new}
+                                </p>
+                                <p className="text-sm text-gray-400">New</p>
+                            </div>
+                            <div className="bg-black/30 border border-yellow-500/30 rounded-lg p-4 text-center">
+                                <p className="text-3xl font-bold text-yellow-400 mb-1">
+                                    {analytics.statusBreakdown.under_investigation}
+                                </p>
+                                <p className="text-sm text-gray-400">
+                                    Under Investigation
+                                </p>
+                            </div>
+                            <div className="bg-black/30 border border-green-500/30 rounded-lg p-4 text-center">
+                                <p className="text-3xl font-bold text-green-400 mb-1">
+                                    {analytics.statusBreakdown.resolved}
+                                </p>
+                                <p className="text-sm text-gray-400">Resolved</p>
+                            </div>
+                            <div className="bg-black/30 border border-gray-500/30 rounded-lg p-4 text-center">
+                                <p className="text-3xl font-bold text-gray-400 mb-1">
+                                    {analytics.statusBreakdown.closed}
+                                </p>
+                                <p className="text-sm text-gray-400">Closed</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Loading state for analytics */}
+            {loadingAnalytics && (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
                 </div>
             )}
 
@@ -584,27 +1132,39 @@ export const ComplaintsTab: React.FC = () => {
                             </div>
 
                             {/* Attachments */}
-                            {selectedAttachments && selectedAttachments.length > 0 ? (
+                            {selectedAttachments &&
+                            selectedAttachments.length > 0 ? (
                                 <div>
                                     <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
                                         <FileText className="w-5 h-5 text-amber-500" />
                                         Attachments ({selectedAttachments.length})
                                     </h3>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                        {selectedAttachments.map((attachment) => (
+                                        {selectedAttachments.map(attachment => (
                                             <div
                                                 key={attachment.id}
                                                 className="bg-black/50 border border-gray-700 rounded-lg p-4 hover:border-amber-500/50 transition-colors"
                                             >
-                                                {attachment.file_type.startsWith('image/') && attachment.signed_url ? (
+                                                {attachment.file_type.startsWith(
+                                                    'image/'
+                                                ) &&
+                                                attachment.signed_url ? (
                                                     <div className="mb-3">
                                                         <img
-                                                            src={attachment.signed_url}
-                                                            alt={attachment.file_name}
+                                                            src={
+                                                                attachment.signed_url
+                                                            }
+                                                            alt={
+                                                                attachment.file_name
+                                                            }
                                                             className="w-full h-32 object-cover rounded-lg"
-                                                            onError={(e) => {
-                                                                console.error('[ADMIN] Image load error:', attachment.signed_url);
-                                                                e.currentTarget.style.display = 'none';
+                                                            onError={e => {
+                                                                console.error(
+                                                                    '[ADMIN] Image load error:',
+                                                                    attachment.signed_url
+                                                                );
+                                                                e.currentTarget.style.display =
+                                                                    'none';
                                                             }}
                                                         />
                                                     </div>
@@ -613,15 +1173,24 @@ export const ComplaintsTab: React.FC = () => {
                                                         <FileText className="w-8 h-8 text-gray-500" />
                                                     </div>
                                                 )}
-                                                <p className="text-white text-sm font-medium truncate mb-1" title={attachment.file_name}>
+                                                <p
+                                                    className="text-white text-sm font-medium truncate mb-1"
+                                                    title={attachment.file_name}
+                                                >
                                                     {attachment.file_name}
                                                 </p>
                                                 <p className="text-gray-500 text-xs mb-2">
-                                                    {(attachment.file_size / 1024).toFixed(1)} KB
+                                                    {(
+                                                        attachment.file_size /
+                                                        1024
+                                                    ).toFixed(1)}{' '}
+                                                    KB
                                                 </p>
                                                 {attachment.signed_url ? (
                                                     <a
-                                                        href={attachment.signed_url}
+                                                        href={
+                                                            attachment.signed_url
+                                                        }
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="text-amber-500 hover:text-amber-400 text-xs"
@@ -629,7 +1198,9 @@ export const ComplaintsTab: React.FC = () => {
                                                         View/Download
                                                     </a>
                                                 ) : (
-                                                    <p className="text-red-400 text-xs">URL not available</p>
+                                                    <p className="text-red-400 text-xs">
+                                                        URL not available
+                                                    </p>
                                                 )}
                                             </div>
                                         ))}
@@ -641,7 +1212,9 @@ export const ComplaintsTab: React.FC = () => {
                                         <FileText className="w-5 h-5 text-amber-500" />
                                         Attachments
                                     </h3>
-                                    <p className="text-gray-400 text-sm">No attachments for this complaint.</p>
+                                    <p className="text-gray-400 text-sm">
+                                        No attachments for this complaint.
+                                    </p>
                                 </div>
                             )}
 

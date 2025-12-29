@@ -109,11 +109,11 @@ export default function ContactPage() {
                         </h3>
                         <a
                             href="mailto:info@crashify.com.au"
-                            className="text-xl font-bold text-white hover:text-purple-200 transition-colors break-all"
+                            className="text-xl font-bold text-white hover:text-sky-200 transition-colors break-all"
                         >
                             info@crashify.com.au
                         </a>
-                        <div className="mt-4 text-purple-100 space-y-2">
+                        <div className="mt-4 text-sky-100 space-y-2">
                             <p className="text-sm">
                                 We respond to all emails within 24 hours during
                                 business days.
@@ -200,7 +200,7 @@ export default function ContactPage() {
 
                     {/* Decorative elements */}
                     <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-600 rounded-full opacity-10 blur-3xl"></div>
-                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-purple-600 rounded-full opacity-10 blur-3xl"></div>
+                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-sky-600 rounded-full opacity-10 blur-3xl"></div>
 
                     <div className="relative bg-zinc-900 rounded-2xl shadow-2xl p-8 border border-zinc-800">
                         <form onSubmit={handleSubmit} className="space-y-6">
@@ -222,7 +222,7 @@ export default function ContactPage() {
                                         required
                                     />
                                     <div
-                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300 ${
+                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-sky-600 transition-all duration-300 ${
                                             focused === 'FirstName'
                                                 ? 'w-full'
                                                 : 'w-0'
@@ -246,7 +246,7 @@ export default function ContactPage() {
                                         required
                                     />
                                     <div
-                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300 ${
+                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-sky-600 transition-all duration-300 ${
                                             focused === 'LastName'
                                                 ? 'w-full'
                                                 : 'w-0'
@@ -274,7 +274,7 @@ export default function ContactPage() {
                                         required
                                     />
                                     <div
-                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300 ${
+                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-sky-600 transition-all duration-300 ${
                                             focused === 'email'
                                                 ? 'w-full'
                                                 : 'w-0'
@@ -299,7 +299,7 @@ export default function ContactPage() {
                                         required
                                     />
                                     <div
-                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300 ${
+                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-sky-600 transition-all duration-300 ${
                                             focused === 'phone'
                                                 ? 'w-full'
                                                 : 'w-0'
@@ -324,7 +324,7 @@ export default function ContactPage() {
                                     className="w-full bg-black border-2 border-zinc-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-blue-500 transition-all duration-300 placeholder-gray-600"
                                 />
                                 <div
-                                    className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300 ${
+                                    className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-sky-600 transition-all duration-300 ${
                                         focused === 'company' ? 'w-full' : 'w-0'
                                     }`}
                                 ></div>
@@ -361,7 +361,7 @@ export default function ContactPage() {
                                         <option value="Other">Other</option>
                                     </select>
                                     <div
-                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300 ${
+                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-sky-600 transition-all duration-300 ${
                                             focused === 'userType'
                                                 ? 'w-full'
                                                 : 'w-0'
@@ -406,7 +406,7 @@ export default function ContactPage() {
                                         <option value="Other">Other</option>
                                     </select>
                                     <div
-                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300 ${
+                                        className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-blue-500 to-sky-600 transition-all duration-300 ${
                                             focused === 'inquiryType'
                                                 ? 'w-full'
                                                 : 'w-0'
@@ -431,7 +431,7 @@ export default function ContactPage() {
                                     required
                                 />
                                 <div
-                                    className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-red-500 to-purple-600 transition-all duration-300 ${
+                                    className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-red-500 to-sky-600 transition-all duration-300 ${
                                         focused === 'userMessage'
                                             ? 'w-full'
                                             : 'w-0'

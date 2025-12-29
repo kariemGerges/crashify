@@ -45,12 +45,18 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     user,
     onLogout,
 }) => {
+    // Toast
     const toast = useToast();
+    // State for the active tab
     const [activeTab, setActiveTab] = useState('assessments');
+    // State for the show add user modal
     const [showAddUserModal, setShowAddUserModal] = useState(false);
+    // State for the users
     const [users, setUsers] = useState<User[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
+    // State for the users error
     const [usersError, setUsersError] = useState('');
+    // State for the delete confirm
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
         userId: string | null;
@@ -60,6 +66,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         userId: null,
         userName: '',
     });
+    // State for the API data
     const [apiData, setApiData] = useState({
         total: 0,
         pending: 0,
@@ -69,6 +76,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         onsite: 0,
         recentSubmissions: 0,
     });
+    // State for the loading of the stats
     const [loadingStats, setLoadingStats] = useState(false);
 
     // Claims Tokens state
@@ -82,12 +90,15 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         sendEmail: true,
         sendSMS: false,
     });
+    // State for the generating token
     const [generatingToken, setGeneratingToken] = useState(false);
+    // State for the generated token
     const [generatedToken, setGeneratedToken] = useState<{
         id: string;
         link: string;
         expiresAt: string;
     } | null>(null);
+    // State for the tokens
     const [tokens, setTokens] = useState<
         Array<{
             id: string;
@@ -102,11 +113,14 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
             claimType: string | null;
         }>
     >([]);
+    // State for the loading of the tokens
     const [loadingTokens, setLoadingTokens] = useState(false);
+    // State for the tokens error
     const [tokensError, setTokensError] = useState('');
 
     // Email processing state
     const [processingEmails, setProcessingEmails] = useState(false);
+    // State for the email process result
     const [emailProcessResult, setEmailProcessResult] = useState<{
         processed: number;
         created: number;
@@ -117,7 +131,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     const getRoleBadgeColor = (role: Role) => {
         switch (role) {
             case 'super_admin':
-                return 'bg-purple-500/20 text-purple-400 border-purple-500/50';
+                return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50';
             case 'admin':
                 return 'bg-red-500/20 text-red-400 border-red-500/50';
             case 'manager':
@@ -333,6 +347,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         setGeneratingToken(true);
         setGeneratedToken(null);
 
+        // Try to generate the token
         try {
             const response = await fetch('/api/admin/tokens/generate', {
                 method: 'POST',
@@ -351,19 +366,22 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                 }),
             });
 
+            // Get the result
             const result = await response.json();
 
+            // If the response is not ok, throw an error
             if (!response.ok) {
                 throw new Error(result.error || 'Failed to generate token');
             }
 
+            // Set the generated token
             setGeneratedToken({
                 id: result.token.id,
                 link: result.link,
                 expiresAt: result.token.expiresAt,
             });
 
-            // Reset form
+            // Reset the token form data
             setTokenFormData({
                 customerEmail: '',
                 customerPhone: '',
@@ -375,13 +393,17 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                 sendSMS: false,
             });
 
+            // Show success toast
             toast.showSuccess('Token generated successfully!');
-            loadTokens(); // Reload tokens list
+            // Reload the tokens list
+            loadTokens();
         } catch (err: unknown) {
+            // Show error toast
             toast.showError(
                 err instanceof Error ? err.message : 'Failed to generate token'
             );
         } finally {
+            // Set the generating token to false
             setGeneratingToken(false);
         }
     };
@@ -392,12 +414,13 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
         toast.showSuccess('Link copied to clipboard!');
     };
 
-    // Process emails manually
+    // Handle the process emails action
     const handleProcessEmails = async () => {
         setProcessingEmails(true);
         setEmailProcessResult(null);
 
         try {
+            // Try to process the emails
             const response = await fetch('/api/email/process', {
                 method: 'POST',
                 headers: {
@@ -406,14 +429,17 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                 credentials: 'include',
             });
 
+            // Get the result
             const result = await response.json();
 
+            // If the response is not ok, throw an error
             if (!response.ok) {
                 throw new Error(
                     result.error || result.details || 'Failed to process emails'
                 );
             }
 
+            // Set the email process result
             setEmailProcessResult({
                 processed: result.processed || 0,
                 created: result.created || 0,
@@ -427,38 +453,44 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                     : [],
             });
 
+            // Show success toast
             toast.showSuccess(
                 `Processed ${result.processed || 0} emails, created ${
                     result.created || 0
                 } assessments`
             );
 
-            // Refresh stats if on assessments tab
+            // Refresh the stats if on the assessments tab
             if (activeTab === 'assessments') {
                 loadStats();
             }
         } catch (err: unknown) {
+            // Show error toast
             const errorMessage =
                 err instanceof Error ? err.message : 'Failed to process emails';
             toast.showError(errorMessage);
+            // Set the email process result
             setEmailProcessResult({
                 processed: 0,
                 created: 0,
                 errors: [{ emailId: 'system', error: errorMessage }],
             });
         } finally {
+            // Set the processing emails to false
             setProcessingEmails(false);
         }
     };
 
-    // Use effect to load the users when the users tab is active
+    // Use effect to load the users, stats, and tokens when the active tab changes
     useEffect(() => {
         if (activeTab === 'users' && ['admin', 'manager'].includes(user.role)) {
             loadUsers();
         }
+        // Load the stats if on the assessments or complaints tab
         if (activeTab === 'assessments' || activeTab === 'complaints') {
             loadStats();
         }
+        // Load the tokens if on the claims tokens tab
         if (
             activeTab === 'claims-tokens' &&
             ['admin', 'manager'].includes(user.role)
@@ -471,7 +503,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     const getFirstLetterCapital = (str: string) => {
         return str.charAt(0).toUpperCase() + str.slice(1);
     };
-
+    
     // The admin dashboard component
     return (
         <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
@@ -578,14 +610,6 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                             <EnhancedStatsOverview
                                 showAllSections={true}
                                 mainTab="assessments"
-                            />
-                        )}
-
-                        {/* Complaints Tab - All sections on one page */}
-                        {activeTab === 'complaints' && (
-                            <EnhancedStatsOverview
-                                showAllSections={true}
-                                mainTab="complaints"
                             />
                         )}
 

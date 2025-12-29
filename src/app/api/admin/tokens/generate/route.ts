@@ -12,6 +12,9 @@ import {
 import { validateAustralianPhone } from '@/server/lib/utils/validation';
 import { supabase } from '@/server/lib/supabase/client';
 import type { Database } from '@/server/lib/types/database.types';
+import { createLogger } from '@/server/lib/utils/logger';
+
+const logger = createLogger('TOKEN_GENERATION');
 
 // Maximum expiration time (7 days) to prevent abuse
 const MAX_EXPIRES_IN_HOURS = 168;
@@ -219,11 +222,11 @@ export async function POST(request: NextRequest) {
             }).insert(auditLogInsert);
         } catch (auditError) {
             // Don't fail the request if audit logging fails, but log it
-            console.error('[TOKEN_GENERATION] Audit log failed:', auditError);
+            logger.error('Audit log failed', auditError);
         }
 
-        // Log the action (console for debugging)
-        console.log('[TOKEN_GENERATED]', {
+        // Log the action (enterprise logging)
+        logger.info('Token generated', {
             tokenId: claimToken.id,
             customerId: sanitizedCustomerId,
             expiresAt: claimToken.expiresAt,
@@ -241,7 +244,7 @@ export async function POST(request: NextRequest) {
             warnings: errors.length > 0 ? errors : undefined,
         });
     } catch (error) {
-        console.error('[TOKEN_GENERATION_ERROR]', error);
+        logger.error('Token generation error', error);
 
         // Log to audit if we have a user session
         try {

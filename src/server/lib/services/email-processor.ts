@@ -1,6 +1,7 @@
 // =============================================
 // FILE: lib/services/email-processor.ts
 // Email processing service for info@crashify.com.au
+// Supports both IMAP (legacy) and Microsoft Graph API (OAuth2)
 // =============================================
 
 import Imap from 'imap';
@@ -11,10 +12,15 @@ import { checkEmailFilter } from './email-filter';
 import { quarantineEmail } from './email-quarantine';
 import { SpamDetector } from './spam-detector';
 import { EmailService } from './email-service';
+import { MicrosoftGraphEmailService } from './microsoft-graph-email';
+import { createLogger } from '@/server/lib/utils/logger';
+
+const logger = createLogger('EmailProcessor');
 
 type AssessmentInsert = Database['public']['Tables']['assessments']['Insert'];
 type UploadedFileInsert =
     Database['public']['Tables']['uploaded_files']['Insert'];
+type EmailProcessingInsert = Database['public']['Tables']['email_processing']['Insert'];
 
 interface EmailProcessingResult {
     success: boolean;
@@ -44,6 +50,44 @@ interface ExtractedData {
 export class EmailProcessor {
     private imap: Imap | null = null;
     private supabase = createServerClient();
+    private graphEmailService: MicrosoftGraphEmailService | null = null;
+    private useGraphAPI: boolean;
+    private currentBatchId: string | null = null; // Track batch processing
+
+    constructor() {
+        // Determine which email service to use
+        // Use Graph API if OAuth2 credentials are configured
+        const hasGraphConfig = !!(
+            process.env.MICROSOFT_CLIENT_ID &&
+            process.env.MICROSOFT_CLIENT_SECRET
+        );
+        this.useGraphAPI = hasGraphConfig;
+
+        logger.debug('Initializing Email Processor', {
+            hasGraphConfig,
+            hasImapConfig: !!process.env.IMAP_PASSWORD,
+        });
+
+        if (this.useGraphAPI) {
+            try {
+                this.graphEmailService = new MicrosoftGraphEmailService();
+                logger.info('Using Microsoft Graph API (OAuth2)', {
+                    tenantId: process.env.MICROSOFT_TENANT_ID || 'common',
+                });
+            } catch (error) {
+                logger.warn('Failed to initialize Graph API, falling back to IMAP', {
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                });
+                this.useGraphAPI = false;
+            }
+        } else {
+            logger.info('Using IMAP (legacy)', {
+                host: process.env.IMAP_HOST || 'imap.secureserver.net',
+                port: process.env.IMAP_PORT || '993',
+                user: process.env.IMAP_USER || 'info@crashify.com.au',
+            });
+        }
+    }
 
     /**
      * Clean and prepare password for IMAP authentication
@@ -107,18 +151,12 @@ export class EmailProcessor {
             };
 
             // Log configuration (without exposing password)
-            console.log('[EmailProcessor] Connecting to IMAP server...', {
+            logger.debug('Connecting to IMAP server', {
                 host: config.host,
                 port: config.port,
                 user: config.user,
+                passwordConfigured: !!config.password,
                 passwordLength: config.password.length,
-                passwordHasSpaces: config.password.includes(' '),
-                passwordStartsWithQuote:
-                    config.password.startsWith('"') ||
-                    config.password.startsWith("'"),
-                passwordEndsWithQuote:
-                    config.password.endsWith('"') ||
-                    config.password.endsWith("'"),
                 passwordWasCleaned: rawPassword !== cleanedPassword,
             });
 
@@ -131,9 +169,7 @@ export class EmailProcessor {
 
             // Warn about potential password issues
             if (rawPassword.trim() !== rawPassword) {
-                console.warn(
-                    '[EmailProcessor] WARNING: Password had leading/trailing spaces. They have been removed.'
-                );
+                logger.warn('Password had leading/trailing spaces, removed');
             }
             if (
                 rawPassword.startsWith('"') ||
@@ -141,9 +177,7 @@ export class EmailProcessor {
                 rawPassword.endsWith('"') ||
                 rawPassword.endsWith("'")
             ) {
-                console.warn(
-                    '[EmailProcessor] WARNING: Password had quotes. They have been removed.'
-                );
+                logger.warn('Password had quotes, removed');
             }
 
             // Set up connection timeout
@@ -166,7 +200,10 @@ export class EmailProcessor {
 
             this.imap.once('ready', () => {
                 clearTimeout(connectionTimeout);
-                console.log('[EmailProcessor] Connected to IMAP server');
+                logger.info('Connected to IMAP server', {
+                    host: config.host,
+                    port: config.port,
+                });
                 resolve();
             });
 
@@ -180,12 +217,10 @@ export class EmailProcessor {
                     }
                 ) => {
                     clearTimeout(connectionTimeout);
-                    console.error('[EmailProcessor] IMAP error:', {
-                        message: err.message,
+                    logger.error('IMAP connection error', err, {
                         source: err.source,
                         textCode: err.textCode,
                         code: err.code,
-                        stack: err.stack,
                     });
 
                     // Provide more helpful error messages
@@ -320,8 +355,302 @@ export class EmailProcessor {
 
     /**
      * Process all unread emails
+     * Uses Microsoft Graph API if configured, otherwise falls back to IMAP
      */
-    async processUnreadEmails(): Promise<EmailProcessingResult> {
+    async processUnreadEmails(
+        requestId?: string,
+        userId?: string,
+        folderName?: string
+    ): Promise<EmailProcessingResult> {
+        if (this.useGraphAPI && this.graphEmailService) {
+            return this.processUnreadEmailsGraphAPI(requestId, userId, folderName);
+        } else {
+            return this.processUnreadEmailsIMAP(requestId, userId);
+        }
+    }
+
+    /**
+     * Process unread emails using Microsoft Graph API (OAuth2)
+     */
+    private async processUnreadEmailsGraphAPI(): Promise<EmailProcessingResult> {
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        const result: EmailProcessingResult = {
+            success: true,
+            processed: 0,
+            created: 0,
+            errors: [],
+        };
+
+        if (!this.graphEmailService) {
+            result.success = false;
+            result.errors.push({
+                emailId: 'system',
+                error: 'Graph API service not initialized',
+            });
+            return result;
+        }
+
+        try {
+            // Test connection first
+            const isConnected = await this.graphEmailService.testConnection();
+            if (!isConnected) {
+                const errorMessage = `Failed to connect to Microsoft Graph API.
+
+Common causes:
+1. Missing API permissions (Mail.Read, Mail.ReadWrite)
+2. Admin consent not granted - THIS IS THE MOST COMMON ISSUE
+3. User not found in tenant
+4. Insufficient privileges
+
+⚠️  QUICK FIX:
+1. Go to Azure Portal > App registrations > Your app > API permissions
+2. Verify you have Application permissions (NOT Delegated):
+   - Mail.Read
+   - Mail.ReadWrite
+   - User.Read.All (for user lookup)
+3. Click "Grant admin consent for [Your Organization]" button
+4. Wait 1-2 minutes, then try again
+
+Check the error logs above for detailed troubleshooting steps.`;
+                
+                throw new Error(errorMessage);
+            }
+
+            // Get unread emails from "Crashify Assessments" folder
+            const FOLDER_NAME = 'Crashify Assessments';
+            const graphEmails = await this.graphEmailService.getUnreadEmails(FOLDER_NAME);
+            
+            // Get folder ID for subsequent operations
+            const folderId = await this.graphEmailService.getFolderByName(FOLDER_NAME);
+
+            if (graphEmails.length === 0) {
+                logger.info('No unread emails found');
+                return result;
+            }
+
+            logger.info('Found unread emails', {
+                count: graphEmails.length,
+                method: 'graph_api',
+            });
+
+            // Process each email
+            for (let i = 0; i < graphEmails.length; i++) {
+                const graphEmail = graphEmails[i];
+                let processingLogId: string | null = null;
+                const processingStartTime = Date.now();
+                
+                try {
+                    result.processed++;
+                    
+                    logger.debug('Processing email', {
+                        index: i + 1,
+                        total: graphEmails.length,
+                        emailId: graphEmail.id,
+                        from: graphEmail.from.emailAddress.address,
+                        subject: graphEmail.subject || '(no subject)',
+                        hasAttachments: graphEmail.hasAttachments,
+                    });
+
+                    // Log email processing start
+                    processingLogId = await this.logEmailProcessing({
+                        email_provider_id: graphEmail.id,
+                        email_provider_type: 'microsoft_graph',
+                        folder_name: folderName || null,
+                        email_from: graphEmail.from.emailAddress.address,
+                        email_from_name: graphEmail.from.emailAddress.name || null,
+                        email_subject: graphEmail.subject || null,
+                        email_received_at: graphEmail.receivedDateTime || null,
+                        email_message_id: graphEmail.internetMessageId || null,
+                        email_has_attachments: graphEmail.hasAttachments || false,
+                        email_attachments_count: 0, // Will update after fetching attachments
+                        processing_status: 'processing',
+                        processing_method: 'graph_api',
+                        processing_started_at: new Date().toISOString(),
+                        request_id: requestId || null,
+                        processed_by_user_id: userId || null,
+                        processing_batch_id: this.currentBatchId,
+                        email_body_preview: graphEmail.bodyPreview?.substring(0, 500) || null,
+                    });
+
+                    // Parse email to ParsedMail format
+                    logger.debug('Parsing email content', {
+                        emailId: graphEmail.id,
+                    });
+                    const parsedEmail = await this.graphEmailService.parseEmail(
+                        graphEmail,
+                        folderId || undefined
+                    );
+                    
+                    logger.debug('Email parsed successfully', {
+                        emailId: graphEmail.id,
+                    });
+
+                    // Get attachments if any
+                    if (graphEmail.hasAttachments) {
+                        logger.debug('Fetching attachments', {
+                            emailId: graphEmail.id,
+                        });
+                        const attachments =
+                            await this.graphEmailService.getEmailAttachments(
+                                graphEmail.id,
+                                folderId || undefined
+                            );
+
+                        logger.debug('Found attachments', {
+                            emailId: graphEmail.id,
+                            count: attachments.length,
+                        });
+
+                        // Add attachments to parsed email
+                        for (const attachment of attachments) {
+                            try {
+                                logger.debug('Processing attachment', {
+                                    emailId: graphEmail.id,
+                                    attachmentName: attachment.name,
+                                    attachmentSize: attachment.size,
+                                    attachmentType: attachment.contentType,
+                                });
+                                const content =
+                                    await this.graphEmailService.getAttachmentContent(
+                                        graphEmail.id,
+                                        attachment.id,
+                                        folderId || undefined
+                                    );
+                                parsedEmail.attachments = parsedEmail.attachments || [];
+                                parsedEmail.attachments.push({
+                                    filename: attachment.name,
+                                    contentType: attachment.contentType,
+                                    content: content,
+                                    size: attachment.size,
+                                });
+                                } catch (attachErr) {
+                                    logger.error(
+                                        'Failed to fetch attachment',
+                                        attachErr,
+                                        {
+                                            emailId: graphEmail.id,
+                                            attachmentId: attachment.id,
+                                            attachmentName: attachment.name,
+                                        }
+                                    );
+                                }
+                        }
+                    }
+
+                    // Process email
+                    logger.debug('Processing email (spam check, extraction, etc.)', {
+                        emailId: graphEmail.id,
+                    });
+                    const created = await this.processEmail(
+                        parsedEmail,
+                        graphEmail.id,
+                        processingLogId
+                    );
+
+                    const processingDuration = Date.now() - processingStartTime;
+
+                    if (created) {
+                        result.created++;
+                        logger.info('Assessment created successfully', {
+                            emailId: graphEmail.id,
+                            duration: `${processingDuration}ms`,
+                        });
+                        
+                        // Update log with success
+                        if (processingLogId) {
+                            await this.updateEmailProcessingLog(processingLogId, {
+                                processing_status: 'completed',
+                                processing_completed_at: new Date().toISOString(),
+                                processing_duration_ms: processingDuration,
+                                assessment_created: true,
+                            });
+                        }
+                    } else {
+                        logger.info('Email processed but no assessment created (duplicate/filtered)', {
+                            emailId: graphEmail.id,
+                            duration: `${processingDuration}ms`,
+                        });
+                        
+                        // Update log with skipped status
+                        if (processingLogId) {
+                            await this.updateEmailProcessingLog(processingLogId, {
+                                processing_status: 'skipped',
+                                processing_completed_at: new Date().toISOString(),
+                                processing_duration_ms: processingDuration,
+                                assessment_created: false,
+                            });
+                        }
+                    }
+
+                    // Mark email as read
+                    logger.debug('Marking email as read', {
+                        emailId: graphEmail.id,
+                    });
+                    await this.graphEmailService.markEmailAsRead(
+                        graphEmail.id,
+                        folderId || undefined
+                    );
+                    
+                    logger.debug('Email marked as read', {
+                        emailId: graphEmail.id,
+                    });
+                } catch (emailErr) {
+                    const processingDuration = Date.now() - processingStartTime;
+                    const errorMessage = emailErr instanceof Error ? emailErr.message : 'Unknown error';
+                    const errorStack = emailErr instanceof Error ? emailErr.stack?.substring(0, 1000) : null;
+                    
+                    logger.error(
+                        'Failed to process email',
+                        emailErr,
+                        {
+                            emailId: graphEmail.id,
+                            errorMessage,
+                            duration: `${processingDuration}ms`,
+                        }
+                    );
+                    
+                    // Update log with error
+                    if (processingLogId) {
+                        await this.updateEmailProcessingLog(processingLogId, {
+                            processing_status: 'failed',
+                            processing_completed_at: new Date().toISOString(),
+                            processing_duration_ms: processingDuration,
+                            error_message: errorMessage,
+                            error_type: emailErr instanceof Error ? emailErr.name : 'UnknownError',
+                            error_stack: errorStack,
+                            retry_count: 0, // Will be incremented on retry
+                        });
+                    }
+                    
+                    result.errors.push({
+                        emailId: graphEmail.id,
+                        error: errorMessage,
+                    });
+                }
+            }
+            
+            logger.info('Graph API processing complete', {
+                processed: result.processed,
+                created: result.created,
+                errors: result.errors.length,
+            });
+        } catch (err) {
+            logger.error('Error processing emails (Graph API)', err);
+            result.success = false;
+            result.errors.push({
+                emailId: 'system',
+                error: err instanceof Error ? err.message : 'Unknown error',
+            });
+        }
+
+        return result;
+    }
+
+    /**
+     * Process unread emails using IMAP (legacy)
+     */
+    private async processUnreadEmailsIMAP(): Promise<EmailProcessingResult> {
+        const isDevelopment = process.env.NODE_ENV === 'development';
         const result: EmailProcessingResult = {
             success: true,
             processed: 0,
@@ -352,16 +681,15 @@ export class EmailProcessor {
                         }
 
                         if (!results || results.length === 0) {
-                            console.log(
-                                '[EmailProcessor] No unread emails found'
-                            );
+                            logger.info('No unread emails found');
                             resolve();
                             return;
                         }
 
-                        console.log(
-                            `[EmailProcessor] Found ${results.length} unread emails`
-                        );
+                        logger.info('Found unread emails', {
+                            count: results.length,
+                            method: 'imap',
+                        });
 
                         // Fetch emails using UIDs
                         const fetch = this.imap!.fetch(results, {
@@ -420,21 +748,47 @@ export class EmailProcessor {
                         });
 
                         fetch.once('end', async () => {
+                            logger.info('Fetched emails', {
+                                count: emails.length,
+                            });
+                            
                             // Process each email
-                            for (const email of emails) {
+                            for (let i = 0; i < emails.length; i++) {
+                                const email = emails[i];
                                 try {
                                     result.processed++;
+                                    
+                                    logger.debug('Processing email', {
+                                        index: i + 1,
+                                        total: emails.length,
+                                        uid: email.uid,
+                                        from: email.parsed.from?.text || email.parsed.from?.value?.[0]?.address || 'Unknown',
+                                        subject: email.parsed.subject || '(no subject)',
+                                        attachments: email.parsed.attachments?.length || 0,
+                                    });
+                                    
                                     const created = await this.processEmail(
                                         email.parsed,
                                         email.uid
                                     );
+                                    
                                     if (created) {
                                         result.created++;
+                                        logger.info('Assessment created successfully', {
+                                            uid: email.uid,
+                                        });
+                                    } else {
+                                        logger.info('Email processed but no assessment created (duplicate/filtered)', {
+                                            uid: email.uid,
+                                        });
                                     }
                                 } catch (emailErr) {
-                                    console.error(
-                                        `[EmailProcessor] Failed to process email ${email.uid}:`,
-                                        emailErr
+                                    logger.error(
+                                        'Failed to process email',
+                                        emailErr,
+                                        {
+                                            uid: email.uid,
+                                        }
                                     );
                                     result.errors.push({
                                         emailId: `uid-${email.uid}`,
@@ -446,6 +800,12 @@ export class EmailProcessor {
                                 }
                             }
 
+                            logger.info('IMAP processing complete', {
+                                processed: result.processed,
+                                created: result.created,
+                                errors: result.errors.length,
+                            });
+                            
                             resolve();
                         });
                     });
@@ -454,7 +814,7 @@ export class EmailProcessor {
 
             await this.disconnect();
         } catch (err) {
-            console.error('[EmailProcessor] Error processing emails:', err);
+            logger.error('Error processing emails', err);
             result.success = false;
             result.errors.push({
                 emailId: 'system',
@@ -493,10 +853,7 @@ export class EmailProcessor {
                 email
             );
         } catch (error) {
-            console.error(
-                '[EmailProcessor] Error processing email directly:',
-                error
-            );
+            logger.error('Error processing email directly', error);
             return false;
         }
     }
@@ -566,19 +923,16 @@ export class EmailProcessor {
                 .single();
 
             if (error || !assessment) {
-                console.error(
-                    '[EmailProcessor] Failed to create assessment:',
-                    error
-                );
+                logger.error('Failed to create assessment', error);
                 return false;
             }
 
-            console.log(
-                `[EmailProcessor] Created assessment ${assessment.id} from email`
-            );
+            logger.info('Created assessment from email', {
+                assessmentId: assessment.id,
+            });
             return true;
         } catch (error) {
-            console.error('[EmailProcessor] Error creating assessment:', error);
+            logger.error('Error creating assessment', error);
             return false;
         }
     }
@@ -586,10 +940,13 @@ export class EmailProcessor {
     /**
      * Process a single email
      * Enhanced with whitelist/blacklist, spam detection, quarantine, and auto-reply (REQ-4, REQ-5, REQ-6)
+     * uidOrEmailId can be a number (IMAP UID) or string (Graph API email ID)
+     * processingLogId is the ID of the email_processing log entry (optional)
      */
     private async processEmail(
         email: ParsedMail,
-        uid: number
+        uidOrEmailId: number | string,
+        processingLogId?: string | null
     ): Promise<boolean> {
         try {
             const senderEmail =
@@ -599,9 +956,11 @@ export class EmailProcessor {
             const filterResult = await checkEmailFilter(senderEmail);
 
             if (filterResult.isBlacklisted) {
-                console.log(
-                    `[EmailProcessor] Email ${uid} from ${senderEmail} is blacklisted: ${filterResult.reason}`
-                );
+                logger.warn('Email is blacklisted', {
+                    emailId: String(uidOrEmailId),
+                    senderEmail,
+                    reason: filterResult.reason,
+                });
 
                 // REQ-5: Send auto-reply for rejected emails
                 await this.sendAutoRejectReply(
@@ -610,7 +969,7 @@ export class EmailProcessor {
                 );
 
                 // Mark email as read (don't process)
-                await this.markEmailAsRead(uid);
+                await this.markEmailAsRead(uidOrEmailId);
                 return false;
             }
 
@@ -630,13 +989,16 @@ export class EmailProcessor {
                     spamCheckResult.action === 'manual_review' ||
                     spamCheckResult.spamScore >= 50
                 ) {
-                    console.log(
-                        `[EmailProcessor] Email ${uid} from ${senderEmail} is suspicious (score: ${spamCheckResult.spamScore}), quarantining`
-                    );
+                    logger.warn('Email is suspicious, quarantining', {
+                        emailId: String(uidOrEmailId),
+                        senderEmail,
+                        spamScore: spamCheckResult.spamScore,
+                    });
 
                     await quarantineEmail({
                         email,
-                        emailUid: uid,
+                        emailUid: typeof uidOrEmailId === 'number' ? uidOrEmailId : undefined,
+                        emailId: typeof uidOrEmailId === 'string' ? uidOrEmailId : undefined,
                         spamScore: spamCheckResult.spamScore,
                         spamFlags: spamCheckResult.flags,
                         reason: `Spam score: ${
@@ -645,15 +1007,17 @@ export class EmailProcessor {
                     });
 
                     // Mark email as read (quarantined)
-                    await this.markEmailAsRead(uid);
+                    await this.markEmailAsRead(uidOrEmailId);
                     return false;
                 }
 
                 // Auto-reject if spam score is too high
                 if (spamCheckResult.action === 'auto_reject') {
-                    console.log(
-                        `[EmailProcessor] Email ${uid} from ${senderEmail} is spam (score: ${spamCheckResult.spamScore}), auto-rejecting`
-                    );
+                    logger.warn('Email is spam, auto-rejecting', {
+                        emailId: String(uidOrEmailId),
+                        senderEmail,
+                        spamScore: spamCheckResult.spamScore,
+                    });
 
                     // REQ-5: Send auto-reply for rejected emails
                     await this.sendAutoRejectReply(
@@ -662,7 +1026,7 @@ export class EmailProcessor {
                     );
 
                     // Mark email as read (rejected)
-                    await this.markEmailAsRead(uid);
+                    await this.markEmailAsRead(uidOrEmailId);
                     return false;
                 }
             }
@@ -686,9 +1050,9 @@ export class EmailProcessor {
             // Check for duplicates
             const isDuplicate = await this.checkDuplicate(extractedData);
             if (isDuplicate) {
-                console.log(
-                    `[EmailProcessor] Duplicate detected for email ${uid}, skipping`
-                );
+                logger.info('Duplicate email detected, skipping', {
+                    emailId: String(uidOrEmailId),
+                });
                 return false;
             }
 
@@ -698,20 +1062,28 @@ export class EmailProcessor {
                 extractedData
             );
 
+            // Update log with assessment ID if available
+            if (processingLogId && assessmentId) {
+                await this.updateEmailProcessingLog(processingLogId, {
+                    assessment_id: assessmentId,
+                    assessment_created: true,
+                    extracted_data: extractedData as any,
+                });
+            }
+
             // Download and save attachments (photos)
             if (email.attachments && email.attachments.length > 0) {
                 await this.saveAttachments(assessmentId, email.attachments);
             }
 
             // Mark email as read
-            await this.markEmailAsRead(uid);
+            await this.markEmailAsRead(uidOrEmailId);
 
             return true;
         } catch (err) {
-            console.error(
-                `[EmailProcessor] Error processing email ${uid}:`,
-                err
-            );
+            logger.error('Error processing email', err, {
+                emailId: String(uidOrEmailId),
+            });
             throw err;
         }
     }
@@ -763,14 +1135,13 @@ export class EmailProcessor {
                     </html>
                 `,
             });
-            console.log(
-                `[EmailProcessor] Auto-reject reply sent to ${toEmail}`
-            );
+            logger.info('Auto-reject reply sent', {
+                toEmail,
+            });
         } catch (error) {
-            console.error(
-                `[EmailProcessor] Failed to send auto-reject reply to ${toEmail}:`,
-                error
-            );
+            logger.error('Failed to send auto-reject reply', error, {
+                toEmail,
+            });
             // Don't throw - email sending failure shouldn't break processing
         }
     }
@@ -916,7 +1287,7 @@ export class EmailProcessor {
 
             return { repairerInfo };
         } catch (err) {
-            console.error('[EmailProcessor] Error extracting PDF data:', err);
+            logger.error('Error extracting PDF data', err);
             return {};
         }
     }
@@ -997,6 +1368,7 @@ export class EmailProcessor {
             incident_description: extractedData.incidentDescription || null,
             damage_areas: [],
             status: 'pending', // Needs manual review
+            source: 'email', // Mark as email-processed
             internal_notes: `Imported from email. Source: ${
                 email.from?.value[0]?.address || 'unknown'
             }. Subject: ${email.subject || 'no subject'}`,
@@ -1023,6 +1395,11 @@ export class EmailProcessor {
             .single();
 
         if (error || !data) {
+            // Log payload and DB response to diagnose constraint failures
+            logger.error('Assessment insert failed', error, {
+                payload: assessmentData,
+                response: { data, error },
+            });
             throw new Error(error?.message || 'Failed to create assessment');
         }
 
@@ -1065,10 +1442,10 @@ export class EmailProcessor {
                     });
 
                 if (uploadError) {
-                    console.error(
-                        `[EmailProcessor] Failed to upload ${fileName}:`,
-                        uploadError
-                    );
+                    logger.error('Failed to upload attachment', uploadError, {
+                        fileName,
+                        assessmentId,
+                    });
                     continue;
                 }
 
@@ -1102,36 +1479,44 @@ export class EmailProcessor {
                     }
                 ).insert([fileInsert]);
             } catch (err) {
-                console.error(
-                    `[EmailProcessor] Error saving attachment ${attachment.filename}:`,
-                    err
-                );
+                logger.error('Error saving attachment', err, {
+                    fileName: attachment.filename,
+                    assessmentId,
+                });
             }
         }
     }
 
     /**
      * Mark email as read
+     * Supports both IMAP (uid) and Graph API (emailId)
      */
-    private async markEmailAsRead(uid: number): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if (!this.imap) {
-                reject(new Error('IMAP not connected'));
-                return;
-            }
-
-            this.imap.addFlags(uid, '\\Seen', err => {
-                if (err) {
-                    console.error(
-                        `[EmailProcessor] Failed to mark email ${uid} as read:`,
-                        err
-                    );
-                    reject(err);
-                } else {
-                    resolve();
+    private async markEmailAsRead(uidOrEmailId: number | string): Promise<void> {
+        if (this.useGraphAPI && this.graphEmailService && typeof uidOrEmailId === 'string') {
+            // Graph API
+            await this.graphEmailService.markEmailAsRead(uidOrEmailId);
+        } else if (typeof uidOrEmailId === 'number') {
+            // IMAP
+            return new Promise((resolve, reject) => {
+                if (!this.imap) {
+                    reject(new Error('IMAP not connected'));
+                    return;
                 }
+
+                this.imap.addFlags(uidOrEmailId, '\\Seen', err => {
+                    if (err) {
+                        logger.error('Failed to mark email as read', err, {
+                            uid: uidOrEmailId,
+                        });
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
             });
-        });
+        } else {
+            throw new Error('Invalid email identifier');
+        }
     }
 
     /**

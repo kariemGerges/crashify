@@ -34,8 +34,6 @@ import {
     RefreshCw,
     MoreVertical,
     X,
-    ChevronDown,
-    ChevronUp,
     BarChart3,
     PieChart as PieChartIcon,
     Activity,
@@ -74,7 +72,7 @@ interface DashboardData {
     lastRefreshed?: string;
 }
 
-const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'];
+const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#0ea5e9'];
 
 interface EnhancedStatsOverviewProps {
     showAllSections?: boolean;
@@ -99,18 +97,22 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
     const [assessmentsSubTab, setAssessmentsSubTab] = useState<
         'overview' | 'analytics' | 'activity'
     >('overview');
+    const [sourceFilter, setSourceFilter] = useState<
+        'all' | 'web_form' | 'email'
+    >('all');
     const [complaintsSubTab, setComplaintsSubTab] = useState<
         'overview' | 'analytics' | 'activity'
     >('overview');
-    const [expandedSections, setExpandedSections] = useState<{
-        charts: boolean;
-        trends: boolean;
-        activity: boolean;
-    }>({
-        charts: false,
-        trends: false,
-        activity: false,
-    });
+    // Remove expansion state - sections are always visible now
+    // const [expandedSections, setExpandedSections] = useState<{
+    //     charts: boolean;
+    //     trends: boolean;
+    //     activity: boolean;
+    // }>({
+    //     charts: false,
+    //     trends: false,
+    //     activity: false,
+    // });
 
     useEffect(() => {
         fetchAnalytics(false);
@@ -124,7 +126,7 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
         );
 
         return () => clearInterval(refreshInterval);
-    }, []);
+    }, [sourceFilter]);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -148,7 +150,12 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
 
     const fetchAnalytics = async (forceRefresh: boolean = false) => {
         try {
-            const response = await fetch('/api/analytics/dashboard', {
+            const url = new URL('/api/analytics/dashboard', window.location.origin);
+            if (sourceFilter !== 'all') {
+                url.searchParams.set('source', sourceFilter);
+            }
+            
+            const response = await fetch(url.toString(), {
                 credentials: 'include',
                 cache: forceRefresh ? 'no-store' : 'default', // Use cache unless force refresh
                 ...(forceRefresh && {
@@ -569,45 +576,83 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
 
                         {/* Sub Tabs - Only show when Assessments tab is active */}
                         {activeMainTab === 'assessments' && (
-                            <div className="flex gap-2 border-b border-gray-700">
-                                <button
-                                    onClick={() =>
-                                        setAssessmentsSubTab('overview')
-                                    }
-                                    className={`px-4 py-2 font-medium transition-colors ${
-                                        assessmentsSubTab === 'overview'
-                                            ? 'text-amber-500 border-b-2 border-amber-500'
-                                            : 'text-gray-400 hover:text-white'
-                                    }`}
-                                >
-                                    Overview
-                                </button>
-                                <button
-                                    onClick={() =>
-                                        setAssessmentsSubTab('analytics')
-                                    }
-                                    className={`px-4 py-2 font-medium transition-colors ${
-                                        assessmentsSubTab === 'analytics'
-                                            ? 'text-amber-500 border-b-2 border-amber-500'
-                                            : 'text-gray-400 hover:text-white'
-                                    }`}
-                                >
-                                    Analytics
-                                </button>
-                                <button
-                                    onClick={() =>
-                                        setAssessmentsSubTab('activity')
-                                    }
-                                    className={`px-4 py-2 font-medium transition-colors ${
-                                        assessmentsSubTab === 'activity'
-                                            ? 'text-amber-500 border-b-2 border-amber-500'
-                                            : 'text-gray-400 hover:text-white'
-                                    }`}
-                                >
-                                    Activity
-                                </button>
-                            </div>
+                            <>
+                                <div className="flex gap-2 border-b border-gray-700 mb-2">
+                                    <button
+                                        onClick={() =>
+                                            setAssessmentsSubTab('overview')
+                                        }
+                                        className={`px-4 py-2 font-medium transition-colors ${
+                                            assessmentsSubTab === 'overview'
+                                                ? 'text-amber-500 border-b-2 border-amber-500'
+                                                : 'text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        Overview
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            setAssessmentsSubTab('analytics')
+                                        }
+                                        className={`px-4 py-2 font-medium transition-colors ${
+                                            assessmentsSubTab === 'analytics'
+                                                ? 'text-amber-500 border-b-2 border-amber-500'
+                                                : 'text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        Analytics
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            setAssessmentsSubTab('activity')
+                                        }
+                                        className={`px-4 py-2 font-medium transition-colors ${
+                                            assessmentsSubTab === 'activity'
+                                                ? 'text-amber-500 border-b-2 border-amber-500'
+                                                : 'text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        Activity
+                                    </button>
+                                </div>
+                            </>
                         )}
+
+                {/* Source Filter Tabs - Always visible when Assessments tab is active */}
+                {activeMainTab === 'assessments' && (
+                    <div className="flex gap-2 mb-4">
+                        <button
+                            onClick={() => setSourceFilter('all')}
+                            className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${
+                                sourceFilter === 'all'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                                    : 'bg-gray-800/50 text-gray-400 hover:text-white border border-gray-700'
+                            }`}
+                        >
+                            All Sources
+                        </button>
+                        <button
+                            onClick={() => setSourceFilter('web_form')}
+                            className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${
+                                sourceFilter === 'web_form'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                                    : 'bg-gray-800/50 text-gray-400 hover:text-white border border-gray-700'
+                            }`}
+                        >
+                            User Submitted
+                        </button>
+                        <button
+                            onClick={() => setSourceFilter('email')}
+                            className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${
+                                sourceFilter === 'email'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                                    : 'bg-gray-800/50 text-gray-400 hover:text-white border border-gray-700'
+                            }`}
+                        >
+                            Email Processed
+                        </button>
+                    </div>
+                )}
 
                         {/* Sub Tabs - Only show when Complaints tab is active */}
                         {activeMainTab === 'complaints' && (
@@ -725,9 +770,9 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
                                     </p>
                                 </div>
 
-                                <div className="bg-gradient-to-br from-purple-500/20 to-purple-500/5 border border-purple-500/30 rounded-xl p-5 hover:border-purple-500/50 transition-all">
+                                <div className="bg-gradient-to-br from-sky-500/20 to-sky-500/5 border border-sky-500/30 rounded-xl p-5 hover:border-sky-500/50 transition-all">
                                     <div className="flex items-center justify-between mb-3">
-                                        <TrendingUp className="w-6 h-6 text-purple-500" />
+                                        <TrendingUp className="w-6 h-6 text-sky-500" />
                                         <span className="text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded">
                                             This Month
                                         </span>
@@ -789,29 +834,15 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
                     {/* Assessments Analytics Section */}
                     {(showAllSections || assessmentsSubTab === 'analytics') && (
                         <div className="space-y-6">
-                            {/* Charts Section - Collapsible */}
+                            {/* Charts Section - Always Visible */}
                             <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl overflow-hidden">
-                                <button
-                                    onClick={() =>
-                                        setExpandedSections(prev => ({
-                                            ...prev,
-                                            charts: !prev.charts,
-                                        }))
-                                    }
-                                    className="w-full flex items-center justify-between p-6 hover:bg-gray-800/50 transition-colors"
-                                >
+                                <div className="p-6 border-b border-gray-800">
                                     <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                                         <PieChartIcon className="w-5 h-5 text-amber-500" />
                                         Status & Distribution Charts
                                     </h3>
-                                    {expandedSections.charts ? (
-                                        <ChevronUp className="w-5 h-5 text-gray-400" />
-                                    ) : (
-                                        <ChevronDown className="w-5 h-5 text-gray-400" />
-                                    )}
-                                </button>
-                                {expandedSections.charts && (
-                                    <div className="p-6 pt-0 space-y-6">
+                                </div>
+                                <div className="p-6 space-y-6">
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {/* Pie chart - assessments by status */}
                                             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
@@ -912,33 +943,18 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
                                                 </ResponsiveContainer>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                </div>
                             </div>
 
-                            {/* Trends Section - Collapsible */}
+                            {/* Trends Section - Always Visible */}
                             <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl overflow-hidden">
-                                <button
-                                    onClick={() =>
-                                        setExpandedSections(prev => ({
-                                            ...prev,
-                                            trends: !prev.trends,
-                                        }))
-                                    }
-                                    className="w-full flex items-center justify-between p-6 hover:bg-gray-800/50 transition-colors"
-                                >
+                                <div className="p-6 border-b border-gray-800">
                                     <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                                         <TrendingUp className="w-5 h-5 text-amber-500" />
                                         Trends & Performance
                                     </h3>
-                                    {expandedSections.trends ? (
-                                        <ChevronUp className="w-5 h-5 text-gray-400" />
-                                    ) : (
-                                        <ChevronDown className="w-5 h-5 text-gray-400" />
-                                    )}
-                                </button>
-                                {expandedSections.trends && (
-                                    <div className="p-6 pt-0 space-y-6">
+                                </div>
+                                <div className="p-6 space-y-6">
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {/* Line graph - monthly volume trend */}
                                             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
@@ -1026,8 +1042,7 @@ export const EnhancedStatsOverview: React.FC<EnhancedStatsOverviewProps> = ({
                                                 </ResponsiveContainer>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                </div>
                             </div>
                         </div>
                     )}

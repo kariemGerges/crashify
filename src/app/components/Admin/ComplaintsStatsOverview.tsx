@@ -79,7 +79,7 @@ interface ComplaintsDashboardData {
     lastRefreshed?: string;
 }
 
-const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'];
+const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#0ea5e9'];
 const SENTIMENT_COLORS = {
     positive: '#10b981',
     negative: '#ef4444',

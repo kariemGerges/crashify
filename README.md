@@ -247,12 +247,33 @@ The application uses Supabase Auth with role-based access control:
 
 ## Email Processing
 
-The platform includes automated email processing:
+The platform includes automated email processing with support for both modern OAuth2 and legacy IMAP:
 
--   IMAP integration for reading incoming emails
+-   **Microsoft Graph API (OAuth2)** - Recommended for Microsoft 365/Outlook accounts
+-   **IMAP (Legacy)** - For non-Microsoft email providers
 -   Automatic assessment request extraction
 -   Email-to-assessment conversion
 -   Support for multiple email providers (GoDaddy, Outlook, etc.)
+
+### Microsoft Graph API OAuth2 Setup
+
+For Microsoft 365 accounts, OAuth2 authentication is recommended. See [OAUTH2_SETUP.md](./OAUTH2_SETUP.md) for detailed step-by-step instructions.
+
+**Quick Setup:**
+
+1. Register an app in [Azure Portal](https://portal.azure.com/)
+2. Create a client secret
+3. Add API permissions: `Mail.Read`, `Mail.ReadWrite`
+4. Grant admin consent
+5. Add to `.env.local`:
+   ```env
+   MICROSOFT_CLIENT_ID=your-client-id
+   MICROSOFT_CLIENT_SECRET=your-client-secret
+   MICROSOFT_TENANT_ID=your-tenant-id  # Optional
+   MICROSOFT_USER_EMAIL=info@crashify.com.au
+   ```
+
+The system automatically uses Graph API if OAuth2 credentials are configured, otherwise falls back to IMAP.
 
 ## AI Features
 
