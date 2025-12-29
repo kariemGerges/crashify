@@ -56,8 +56,7 @@ export async function quarantineEmail(
         spam_score: spamScore,
         spam_flags: spamFlags,
         reason,
-        email_uid: emailUid || null, // IMAP UID (legacy)
-        email_id: emailId || null, // Graph API email ID (OAuth2)
+        email_uid: emailUid || null, // IMAP UID (legacy) or Graph API email ID stored as number if possible
         attachments_count: email.attachments?.length || 0,
         raw_email_data: {
             headers: headersObj as Json,

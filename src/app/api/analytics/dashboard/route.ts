@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
 
         // REQ-48: Bar chart - top repairers
         // Extract repairer information from assessments metadata or company_name
-        let repairerQuery = (
+        const baseRepairerQuery = (
             serverClient.from('assessments') as unknown as {
                 select: (columns: string) => {
                     is: (column: string, value: null) => {
@@ -248,9 +248,17 @@ export async function GET(request: NextRequest) {
         )
             .select('company_name, metadata')
             .is('deleted_at', null);
-        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email')) {
-            repairerQuery = repairerQuery.eq('source', sourceFilter) as typeof repairerQuery;
+        
+        let repairerQuery: Promise<{
+            data: Array<{ company_name: string; metadata: Json | null }> | null;
+        }>;
+        
+        if (sourceFilter && (sourceFilter === 'web_form' || sourceFilter === 'email') && baseRepairerQuery.eq) {
+            repairerQuery = baseRepairerQuery.eq('source', sourceFilter);
+        } else {
+            repairerQuery = baseRepairerQuery;
         }
+        
         const { data: repairerAssessments } = await repairerQuery;
 
         const repairerCounts: Record<string, number> = {};

@@ -372,7 +372,11 @@ export class EmailProcessor {
     /**
      * Process unread emails using Microsoft Graph API (OAuth2)
      */
-    private async processUnreadEmailsGraphAPI(): Promise<EmailProcessingResult> {
+    private async processUnreadEmailsGraphAPI(
+        requestId?: string,
+        userId?: string,
+        folderName?: string
+    ): Promise<EmailProcessingResult> {
         const isDevelopment = process.env.NODE_ENV === 'development';
         const result: EmailProcessingResult = {
             success: true,
@@ -522,7 +526,14 @@ Check the error logs above for detailed troubleshooting steps.`;
                                     contentType: attachment.contentType,
                                     content: content,
                                     size: attachment.size,
-                                });
+                                    related: false,
+                                    type: 'attachment',
+                                    contentDisposition: 'attachment',
+                                    headers: new Map(),
+                                    headerLines: [],
+                                    checksum: '',
+                                    cid: '',
+                                } as ParsedMail['attachments'][0]);
                                 } catch (attachErr) {
                                     logger.error(
                                         'Failed to fetch attachment',
@@ -649,7 +660,10 @@ Check the error logs above for detailed troubleshooting steps.`;
     /**
      * Process unread emails using IMAP (legacy)
      */
-    private async processUnreadEmailsIMAP(): Promise<EmailProcessingResult> {
+    private async processUnreadEmailsIMAP(
+        requestId?: string,
+        userId?: string
+    ): Promise<EmailProcessingResult> {
         const isDevelopment = process.env.NODE_ENV === 'development';
         const result: EmailProcessingResult = {
             success: true,
@@ -1368,7 +1382,6 @@ Check the error logs above for detailed troubleshooting steps.`;
             incident_description: extractedData.incidentDescription || null,
             damage_areas: [],
             status: 'pending', // Needs manual review
-            source: 'email', // Mark as email-processed
             internal_notes: `Imported from email. Source: ${
                 email.from?.value[0]?.address || 'unknown'
             }. Subject: ${email.subject || 'no subject'}`,
@@ -1538,5 +1551,77 @@ Check the error logs above for detailed troubleshooting steps.`;
         };
 
         return domainMap[domain.toLowerCase()] || null;
+    }
+
+    /**
+     * Log email processing start
+     */
+    private async logEmailProcessing(
+        data: EmailProcessingInsert
+    ): Promise<string | null> {
+        try {
+            const { data: logEntry, error } = await (
+                this.supabase.from('email_processing') as unknown as {
+                    insert: (values: EmailProcessingInsert[]) => {
+                        select: (columns: string) => {
+                            single: () => Promise<{
+                                data: { id: string } | null;
+                                error: { message: string } | null;
+                            }>;
+                        };
+                    };
+                }
+            )
+                .insert([data])
+                .select('id')
+                .single();
+
+            if (error || !logEntry) {
+                logger.error('Failed to log email processing', error, {
+                    emailProviderId: data.email_provider_id,
+                });
+                return null;
+            }
+
+            return logEntry.id;
+        } catch (error) {
+            logger.error('Error logging email processing', error);
+            return null;
+        }
+    }
+
+    /**
+     * Update email processing log
+     */
+    private async updateEmailProcessingLog(
+        logId: string,
+        updates: Partial<EmailProcessingInsert>
+    ): Promise<void> {
+        try {
+            const { error } = await (
+                this.supabase.from('email_processing') as unknown as {
+                    update: (values: Partial<EmailProcessingInsert>) => {
+                        eq: (column: string, value: string) => Promise<{
+                            error: { message: string } | null;
+                        }>;
+                    };
+                }
+            )
+                .update({
+                    ...updates,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', logId);
+
+            if (error) {
+                logger.error('Failed to update email processing log', error, {
+                    logId,
+                });
+            }
+        } catch (error) {
+            logger.error('Error updating email processing log', error, {
+                logId,
+            });
+        }
     }
 }

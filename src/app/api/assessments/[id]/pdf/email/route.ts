@@ -10,6 +10,9 @@ import { generatePDFReport } from '@/server/lib/utils/pdf-generators';
 import { assessmentToPDFData } from '@/server/lib/utils/assessment-to-pdf-data';
 import { Resend } from 'resend';
 import type { PDFReportType } from '@/server/lib/types/pdf-report.types';
+import type { Database } from '@/server/lib/types/database.types';
+
+type AssessmentRow = Database['public']['Tables']['assessments']['Row'];
 
 // Get email configuration (same as EmailService uses)
 function getEmailConfig() {
@@ -84,8 +87,11 @@ export async function POST(
             );
         }
 
+        // Type assertion to ensure TypeScript recognizes all fields
+        const typedAssessment = assessment as AssessmentRow;
+
         // Convert to PDF data format
-        const pdfData = assessmentToPDFData(assessment);
+        const pdfData = assessmentToPDFData(typedAssessment);
 
         // Generate PDF
         const doc = generatePDFReport({
@@ -105,21 +111,21 @@ export async function POST(
             'total-loss': 'Total-Loss-Assessment',
         };
 
-        const filename = `${reportTypeNames[reportType]}-${assessment.assessment_reference_number || id}.pdf`;
+        const filename = `${reportTypeNames[reportType]}-${typedAssessment.assessment_reference_number || id}.pdf`;
 
         // Generate email subject
-        const defaultSubject = `${reportTypeNames[reportType]} - ${assessment.claim_reference || 'Assessment'}`;
+        const defaultSubject = `${reportTypeNames[reportType]} - ${typedAssessment.claim_reference || 'Assessment'}`;
         const emailSubject = subject || defaultSubject;
 
         // Generate email body
-        const vehicleInfo = `${assessment.make} ${assessment.model}${assessment.year ? ` (${assessment.year})` : ''}`;
+        const vehicleInfo = `${typedAssessment.make} ${typedAssessment.model}${typedAssessment.year ? ` (${typedAssessment.year})` : ''}`;
         const emailBody = message || `
             <p>Dear ${recipientEmail},</p>
             <p>Please find attached the ${reportTypeNames[reportType]} for the following assessment:</p>
             <ul>
-                <li><strong>Claim Reference:</strong> ${assessment.claim_reference || 'N/A'}</li>
+                <li><strong>Claim Reference:</strong> ${typedAssessment.claim_reference || 'N/A'}</li>
                 <li><strong>Vehicle:</strong> ${vehicleInfo}</li>
-                <li><strong>Assessment Reference:</strong> ${assessment.assessment_reference_number || id}</li>
+                <li><strong>Assessment Reference:</strong> ${typedAssessment.assessment_reference_number || id}</li>
             </ul>
             <p>If you have any questions, please contact us.</p>
             <p>Best regards,<br>Crashify Team</p>

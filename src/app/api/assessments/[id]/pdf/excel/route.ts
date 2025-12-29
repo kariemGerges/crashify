@@ -9,6 +9,9 @@ import { getSession } from '@/server/lib/auth/session';
 import { assessmentToPDFData } from '@/server/lib/utils/assessment-to-pdf-data';
 import * as XLSX from 'xlsx';
 import type { PDFReportType } from '@/server/lib/types/pdf-report.types';
+import type { Database } from '@/server/lib/types/database.types';
+
+type AssessmentRow = Database['public']['Tables']['assessments']['Row'];
 
 export async function GET(
     request: NextRequest,
@@ -55,8 +58,11 @@ export async function GET(
             );
         }
 
+        // Ensure TypeScript recognizes all fields
+        const typedAssessment = assessment as AssessmentRow;
+
         // Convert to PDF data format
-        const pdfData = assessmentToPDFData(assessment);
+        const pdfData = assessmentToPDFData(typedAssessment);
 
         // Create workbook
         const workbook = XLSX.utils.book_new();
@@ -191,7 +197,7 @@ export async function GET(
             'total-loss': 'Total-Loss-Assessment',
         };
 
-        const filename = `${reportTypeNames[reportType]}-${assessment.assessment_reference_number || id}.xlsx`;
+        const filename = `${reportTypeNames[reportType]}-${typedAssessment.assessment_reference_number || id}.xlsx`;
 
         return new NextResponse(excelBuffer, {
             headers: {
