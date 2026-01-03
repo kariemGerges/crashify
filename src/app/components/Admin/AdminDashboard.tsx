@@ -1,5 +1,6 @@
 // Admin Dashboard Component
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { User, Role } from '@/server/lib/types/auth';
 import {
     Shield,
@@ -46,8 +47,22 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
 }) => {
     // Toast
     const toast = useToast();
-    // State for the active tab
-    const [activeTab, setActiveTab] = useState('assessments');
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const pathname = usePathname();
+    // State for the active tab - initialize from URL if available
+    const [activeTab, setActiveTab] = useState(() => {
+        const tabFromUrl = searchParams?.get('tab');
+        return tabFromUrl || 'assessments';
+    });
+
+    // Sync activeTab with URL parameter when it changes (only from URL, not from state changes)
+    useEffect(() => {
+        const tabFromUrl = searchParams?.get('tab');
+        if (tabFromUrl && tabFromUrl !== activeTab) {
+            setActiveTab(tabFromUrl);
+        }
+    }, [searchParams]);
     // State for the show add user modal
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     // State for the users
@@ -577,7 +592,16 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                             return (
                                 <button
                                     key={item.id}
-                                    onClick={() => setActiveTab(item.id)}
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setActiveTab(item.id);
+                                        // Update URL to reflect the active tab
+                                        const params = new URLSearchParams(searchParams?.toString() || '');
+                                        params.set('tab', item.id);
+                                        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+                                    }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                                         isActive
                                             ? 'bg-gradient-to-r from-amber-500/20 to-red-600/20 text-amber-400 border border-amber-500/50'

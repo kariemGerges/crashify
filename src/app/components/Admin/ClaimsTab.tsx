@@ -13,7 +13,7 @@ import {
     Mail,
     RefreshCw,
 } from 'lucide-react';
-import { AssessmentDetail } from './AssessmentDetail';
+import { useRouter } from 'next/navigation';
 import { IQHelper } from './IQHelper';
 import { EmailAutomation } from './EmailAutomation';
 import { ManualClaimForm } from './ManualClaimForm';
@@ -47,6 +47,7 @@ interface ClaimsResponse {
 
 export const ClaimsTab: React.FC = () => {
     const toast = useToast();
+    const router = useRouter();
     const [activeSubTab, setActiveSubTab] = useState<
         'user-submitted' | 'email-processed' | 'manually-added'
     >('user-submitted');
@@ -56,9 +57,6 @@ export const ClaimsTab: React.FC = () => {
     const [claims, setClaims] = useState<Claim[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [selectedAssessmentId, setSelectedAssessmentId] = useState<
-        string | null
-    >(null);
     const [iqHelperAssessmentId, setIqHelperAssessmentId] = useState<
         string | null
     >(null);
@@ -714,7 +712,7 @@ export const ClaimsTab: React.FC = () => {
                             <div
                                 key={claim.id}
                                 onClick={() =>
-                                    setSelectedAssessmentId(claim.id)
+                                    router.push(`/admin/assessments/${claim.id}`)
                                 }
                                 className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-gray-800 hover:border-amber-500/50 transition-colors cursor-pointer"
                             >
@@ -824,28 +822,6 @@ export const ClaimsTab: React.FC = () => {
                         </div>
                     )}
                 </>
-            )}
-
-            {selectedAssessmentId && (
-                <AssessmentDetail
-                    assessmentId={selectedAssessmentId}
-                    onClose={() => setSelectedAssessmentId(null)}
-                    onUpdate={() => {
-                        let source: string | undefined;
-                        if (activeSubTab === 'email-processed') {
-                            source = 'email';
-                        } else if (activeSubTab === 'manually-added') {
-                            source = 'manual';
-                        } else {
-                            source = 'web_form';
-                        }
-                        loadClaims(
-                            pagination.page,
-                            pagination.pageSize,
-                            source
-                        );
-                    }}
-                />
             )}
 
             {iqHelperAssessmentId && (
