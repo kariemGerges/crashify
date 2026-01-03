@@ -23,7 +23,7 @@ import Image from 'next/image';
 import { useToast } from '../Toast';
 import { PDFReportActions } from '../Assessment/PDFReportActions';
 import { EstimateEditor } from './EstimateEditor';
-import { InteractiveDamageDiagram } from './InteractiveDamageDiagram';
+import { InteractiveDamageDiagram, type DamageEntry } from './InteractiveDamageDiagram';
 
 interface OwnerInfo {
     firstName?: string;
@@ -1784,14 +1784,7 @@ export const AssessmentDetailPage: React.FC<AssessmentDetailPageProps> = ({
                                 try {
                                     const damageData = (assessment as any).damage_data;
                                     if (damageData && Array.isArray(damageData)) {
-                                        return damageData as Array<{
-                                            zone_id: string;
-                                            label: string;
-                                            category: string;
-                                            severity: string;
-                                            pre_existing: boolean;
-                                            comments?: string;
-                                        }>;
+                                        return damageData as DamageEntry[];
                                     }
                                 } catch (e) {
                                     console.error('Error parsing damage_data:', e);
@@ -1809,7 +1802,7 @@ export const AssessmentDetailPage: React.FC<AssessmentDetailPageProps> = ({
                                             severity: 'LP' as const,
                                             pre_existing: false,
                                             comments: '',
-                                        };
+                                        } as DamageEntry;
                                     });
                                 }
                                 return [];

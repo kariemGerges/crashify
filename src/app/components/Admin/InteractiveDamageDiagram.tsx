@@ -118,7 +118,7 @@ interface SVCZoneMetadata {
 }
 
 // Damage Entry Interface (matches SVC spec exactly)
-interface DamageEntry {
+export interface DamageEntry {
     zone_id: string;
     label: string;
     category: ZoneCategory;
@@ -203,12 +203,6 @@ const DEFAULT_ZONE_METADATA: Record<string, SVCZoneMetadata> = {
     // ============================================
     // LEFT SIDE VIEW (LHS) Zones
     // ============================================
-    LV_SUV_L_FDR: {
-        zone_id: 'LV_SUV_L_FDR',
-        label: 'Left Front Guard',
-        category: 'PNL',
-        severity_allowed: ['LP', 'HP', 'LS', 'HS', 'UN'],
-    },
     LV_SUV_L_DOR_F: {
         zone_id: 'LV_SUV_L_DOR_F',
         label: 'Left Front Door',
@@ -221,22 +215,10 @@ const DEFAULT_ZONE_METADATA: Record<string, SVCZoneMetadata> = {
         category: 'PNL',
         severity_allowed: ['LP', 'HP', 'LS', 'HS', 'UN'],
     },
-    LV_SUV_L_QTR: {
-        zone_id: 'LV_SUV_L_QTR',
-        label: 'Left Quarter Panel',
-        category: 'PNL',
-        severity_allowed: ['LP', 'HP', 'LS', 'HS', 'UN'],
-    },
     
     // ============================================
     // RIGHT SIDE VIEW (RHS) Zones
     // ============================================
-    LV_SUV_R_FDR: {
-        zone_id: 'LV_SUV_R_FDR',
-        label: 'Right Front Guard',
-        category: 'PNL',
-        severity_allowed: ['LP', 'HP', 'LS', 'HS', 'UN'],
-    },
     LV_SUV_R_DOR_F: {
         zone_id: 'LV_SUV_R_DOR_F',
         label: 'Right Front Door',
@@ -246,12 +228,6 @@ const DEFAULT_ZONE_METADATA: Record<string, SVCZoneMetadata> = {
     LV_SUV_R_DOR_R: {
         zone_id: 'LV_SUV_R_DOR_R',
         label: 'Right Rear Door',
-        category: 'PNL',
-        severity_allowed: ['LP', 'HP', 'LS', 'HS', 'UN'],
-    },
-    LV_SUV_R_QTR: {
-        zone_id: 'LV_SUV_R_QTR',
-        label: 'Right Quarter Panel',
         category: 'PNL',
         severity_allowed: ['LP', 'HP', 'LS', 'HS', 'UN'],
     },
@@ -1058,7 +1034,6 @@ export const InteractiveDamageDiagram: React.FC<
                                                 minDistance={1.5}
                                                 maxDistance={5}
                                                 autoRotate={false}
-                                                touchAction="none"
                                             />
                                             <gridHelper args={[2, 20, '#444444', '#222222']} />
                                         </Suspense>
