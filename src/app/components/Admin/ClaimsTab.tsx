@@ -18,6 +18,7 @@ import { IQHelper } from './IQHelper';
 import { EmailAutomation } from './EmailAutomation';
 import { ManualClaimForm } from './ManualClaimForm';
 import { useToast } from '../Toast';
+import { EmailProcessingLoader } from './EmailProcessingLoader';
 
 interface Claim {
     id: string;
@@ -76,6 +77,9 @@ export const ClaimsTab: React.FC = () => {
         created: number;
         errors: Array<{ emailId: string; error: string }>;
     } | null>(null);
+    const [processingStage, setProcessingStage] = useState<string>('connecting');
+    const [processingProgress, setProcessingProgress] = useState(0);
+    const [processingMessage, setProcessingMessage] = useState<string>('');
 
     const loadClaims = async (
         page: number = 1,
@@ -370,9 +374,48 @@ export const ClaimsTab: React.FC = () => {
     const handleProcessEmails = async () => {
         setProcessingEmails(true);
         setEmailProcessResult(null);
+        setProcessingStage('connecting');
+        setProcessingProgress(0);
+        setProcessingMessage('');
+
+        // Stage progression with timing
+        const stageTimings = {
+            connecting: 500,
+            fetching: 2000,
+            'ai-processing': 3000,
+            creating: 2000,
+            finalizing: 1000,
+        };
+
+        const updateStage = (stage: string, progress: number, message?: string) => {
+            setProcessingStage(stage);
+            setProcessingProgress(progress);
+            if (message) setProcessingMessage(message);
+        };
 
         try {
-            // Try to process the emails
+            // Stage 1: Connecting
+            updateStage('connecting', 10, 'Connecting to email server...');
+            await new Promise(resolve => setTimeout(resolve, stageTimings.connecting));
+
+            // Stage 2: Fetching
+            updateStage('fetching', 25, 'Fetching unread emails from inbox...');
+            await new Promise(resolve => setTimeout(resolve, stageTimings.fetching));
+
+            // Stage 3: AI Processing
+            updateStage('ai-processing', 50, 'Claude AI is extracting claim information...');
+            await new Promise(resolve => setTimeout(resolve, stageTimings['ai-processing']));
+
+            // Stage 4: Creating
+            updateStage('creating', 75, 'Creating assessment records...');
+            await new Promise(resolve => setTimeout(resolve, stageTimings.creating));
+
+            // Stage 5: Finalizing
+            updateStage('finalizing', 90, 'Saving attachments and finalizing...');
+            await new Promise(resolve => setTimeout(resolve, stageTimings.finalizing));
+
+            // Make the actual API call
+            updateStage('finalizing', 95, 'Completing processing...');
             const response = await fetch('/api/email/process', {
                 method: 'POST',
                 headers: {
@@ -390,6 +433,10 @@ export const ClaimsTab: React.FC = () => {
                     result.error || result.details || 'Failed to process emails'
                 );
             }
+
+            // Complete
+            updateStage('finalizing', 100, 'Processing complete!');
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             // Set the email process result
             setEmailProcessResult({
@@ -427,14 +474,34 @@ export const ClaimsTab: React.FC = () => {
                 created: 0,
                 errors: [{ emailId: 'system', error: errorMessage }],
             });
+            setProcessingMessage(`Error: ${errorMessage}`);
         } finally {
+            // Wait a moment before closing
+            await new Promise(resolve => setTimeout(resolve, 1000));
             // Set the processing emails to false
             setProcessingEmails(false);
+            setProcessingStage('connecting');
+            setProcessingProgress(0);
+            setProcessingMessage('');
         }
     };
 
     return (
-        <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
+        <>
+            {/* Email Processing Loader */}
+            <EmailProcessingLoader
+                isOpen={processingEmails}
+                currentStage={processingStage}
+                progress={processingProgress}
+                message={processingMessage}
+                error={
+                    emailProcessResult?.errors.length
+                        ? emailProcessResult.errors[0]?.error
+                        : undefined
+                }
+            />
+
+            <div className="bg-gray-900/50 border border-amber-500/20 rounded-xl p-6">
             <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold text-white">Recent Claims</h3>
                 {pagination.total > 0 && (
@@ -868,5 +935,6 @@ export const ClaimsTab: React.FC = () => {
                 />
             )}
         </div>
+        </>
     );
 };

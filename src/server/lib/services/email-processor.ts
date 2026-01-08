@@ -14,6 +14,7 @@ import { SpamDetector } from './spam-detector';
 import { EmailService } from './email-service';
 import { MicrosoftGraphEmailService } from './microsoft-graph-email';
 import { createLogger } from '@/server/lib/utils/logger';
+import { extractClaimFromEmail, extractComplaintFromEmail, validateEmailAsClaim } from './claude-service';
 
 const logger = createLogger('EmailProcessor');
 
@@ -764,6 +765,65 @@ Check the error logs above for detailed troubleshooting steps.`;
                         folderId || undefined
                     );
 
+                    // Get attachments if any
+                    if (graphEmail.hasAttachments) {
+                        logger.debug('Fetching attachments for complaint email', {
+                            emailId: graphEmail.id,
+                        });
+                        const attachments =
+                            await this.graphEmailService.getEmailAttachments(
+                                graphEmail.id,
+                                folderId || undefined
+                            );
+
+                        logger.debug('Found attachments for complaint', {
+                            emailId: graphEmail.id,
+                            count: attachments.length,
+                        });
+
+                        // Add attachments to parsed email
+                        for (const attachment of attachments) {
+                            try {
+                                logger.debug('Processing attachment', {
+                                    emailId: graphEmail.id,
+                                    attachmentName: attachment.name,
+                                    attachmentSize: attachment.size,
+                                    attachmentType: attachment.contentType,
+                                });
+                                const content =
+                                    await this.graphEmailService.getAttachmentContent(
+                                        graphEmail.id,
+                                        attachment.id,
+                                        folderId || undefined
+                                    );
+                                parsedEmail.attachments = parsedEmail.attachments || [];
+                                parsedEmail.attachments.push({
+                                    filename: attachment.name,
+                                    contentType: attachment.contentType,
+                                    content: content,
+                                    size: attachment.size,
+                                    related: false,
+                                    type: 'attachment',
+                                    contentDisposition: 'attachment',
+                                    headers: new Map(),
+                                    headerLines: [],
+                                    checksum: '',
+                                    cid: '',
+                                } as ParsedMail['attachments'][0]);
+                            } catch (attachErr) {
+                                logger.error(
+                                    'Failed to fetch attachment',
+                                    attachErr,
+                                    {
+                                        emailId: graphEmail.id,
+                                        attachmentId: attachment.id,
+                                        attachmentName: attachment.name,
+                                    }
+                                );
+                            }
+                        }
+                    }
+
                     // Create complaint from email
                     const complaintCreated = await this.createComplaintFromEmail(
                         parsedEmail,
@@ -979,6 +1039,7 @@ Check the error logs above for detailed troubleshooting steps.`;
 
     /**
      * Create a complaint from email data
+     * Uses Claude AI extraction if available, otherwise falls back to pattern matching
      */
     private async createComplaintFromEmail(
         email: ParsedMail | {
@@ -987,6 +1048,11 @@ Check the error logs above for detailed troubleshooting steps.`;
             text: string;
             html: string | null;
             date: Date;
+            attachments?: Array<{
+                filename?: string;
+                contentType: string;
+                content: Buffer | string;
+            }>;
         },
         emailId: string | number
     ): Promise<boolean> {
@@ -997,11 +1063,137 @@ Check the error logs above for detailed troubleshooting steps.`;
                               senderEmail.split('@')[0] || 
                               'Unknown';
 
+            // Extract data using Claude AI from email body and PDF attachments
+            let claudeExtractionResult = null;
+            let useClaudeData = false;
+            
+            try {
+                // Prepare email body text
+                const emailBody = email.text || email.html || '';
+                const emailSubject = email.subject || '';
+                const emailFrom = senderEmail;
+                
+                // Extract text from PDF attachments
+                const pdfTexts: string[] = [];
+                if (email.attachments && email.attachments.length > 0) {
+                    for (const attachment of email.attachments) {
+                        if (attachment.contentType === 'application/pdf') {
+                            try {
+                                const pdfParseModule = await import('pdf-parse');
+                                type PdfParseFunction = (
+                                    data: Buffer
+                                ) => Promise<{ text: string; [key: string]: unknown }>;
+                                const pdfParse: PdfParseFunction =
+                                    'default' in pdfParseModule &&
+                                    typeof pdfParseModule.default === 'function'
+                                        ? (pdfParseModule.default as unknown as PdfParseFunction)
+                                        : (pdfParseModule as unknown as PdfParseFunction);
+                                
+                                const pdfBuffer = Buffer.isBuffer(attachment.content)
+                                    ? attachment.content
+                                    : Buffer.from(attachment.content);
+                                const pdfData = await pdfParse(pdfBuffer);
+                                pdfTexts.push(pdfData.text);
+                            } catch (pdfErr) {
+                                logger.warn('Failed to parse PDF attachment for complaint', pdfErr, {
+                                    emailId: String(emailId),
+                                    attachmentName: attachment.filename,
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                // Use Claude to extract complaint information
+                logger.debug('Extracting complaint information using Claude AI', {
+                    emailId: String(emailId),
+                    hasPdfAttachments: pdfTexts.length > 0,
+                });
+                
+                claudeExtractionResult = await extractComplaintFromEmail(
+                    emailBody,
+                    emailSubject,
+                    emailFrom,
+                    pdfTexts.length > 0 ? pdfTexts : undefined
+                );
+                
+                logger.info('Claude complaint extraction completed', {
+                    emailId: String(emailId),
+                    confidence: claudeExtractionResult.confidence,
+                    fieldsExtracted: Object.keys(claudeExtractionResult).length,
+                });
+                
+                useClaudeData = true;
+            } catch (claudeErr) {
+                logger.error('Claude extraction failed for complaint, falling back to pattern matching', claudeErr, {
+                    emailId: String(emailId),
+                });
+            }
+
             // Use email subject and body as description
             const emailText = email.text || email.html || '';
-            const description = email.subject 
-                ? `${email.subject}\n\n${emailText.substring(0, 2000)}`
-                : emailText.substring(0, 2000);
+            let description: string;
+            let category: 'service_quality' | 'delayed_response' | 'incorrect_assessment' | 'billing_issue' | 'communication' | 'data_privacy' | 'other';
+            let priority: 'low' | 'medium' | 'high' | 'critical';
+            let phone: string | null;
+            let complainantName: string;
+            let complainantEmail: string;
+            let assessmentId: string | null = null;
+
+            if (useClaudeData && claudeExtractionResult) {
+                // Use Claude extracted data
+                description = claudeExtractionResult.description || 
+                    (email.subject ? `${email.subject}\n\n${emailText.substring(0, 2000)}` : emailText.substring(0, 2000));
+                category = claudeExtractionResult.category || 'other';
+                priority = claudeExtractionResult.priority || 'medium';
+                phone = claudeExtractionResult.complainant_phone || null;
+                complainantName = claudeExtractionResult.complainant_name || senderName;
+                complainantEmail = claudeExtractionResult.complainant_email || senderEmail.toLowerCase();
+                
+                // Try to find assessment if reference is provided
+                if (claudeExtractionResult.assessment_reference || claudeExtractionResult.assessment_id) {
+                    const assessmentRef = claudeExtractionResult.assessment_reference || claudeExtractionResult.assessment_id;
+                    const { data: assessment } = await this.supabase
+                        .from('assessments')
+                        .select('id')
+                        .or(`id.eq.${assessmentRef},claim_reference.eq.${assessmentRef}`)
+                        .single();
+                    if (assessment) {
+                        assessmentId = assessment.id;
+                    }
+                }
+            } else {
+                // Fallback to pattern matching
+                description = email.subject 
+                    ? `${email.subject}\n\n${emailText.substring(0, 2000)}`
+                    : emailText.substring(0, 2000);
+                
+                // Extract phone if available in email text
+                const phoneMatch = emailText.match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+                phone = phoneMatch ? phoneMatch[0] : null;
+
+                // Determine category and priority from email content
+                const emailContent = (email.subject + ' ' + emailText).toLowerCase();
+                category = 'other';
+                priority = 'medium';
+
+                if (emailContent.includes('urgent') || emailContent.includes('critical') || emailContent.includes('immediate')) {
+                    priority = 'critical';
+                } else if (emailContent.includes('important') || emailContent.includes('asap')) {
+                    priority = 'high';
+                }
+
+                if (emailContent.includes('billing') || emailContent.includes('invoice') || emailContent.includes('payment')) {
+                    category = 'billing_issue';
+                } else if (emailContent.includes('service') || emailContent.includes('quality') || emailContent.includes('work')) {
+                    category = 'service_quality';
+                } else if (emailContent.includes('communication') || emailContent.includes('response') || emailContent.includes('reply')) {
+                    category = 'communication';
+                }
+                
+                complainantName = senderName;
+                complainantEmail = senderEmail.toLowerCase();
+            }
 
             if (description.trim().length < 10) {
                 logger.warn('Email content too short to create complaint', {
@@ -1011,45 +1203,27 @@ Check the error logs above for detailed troubleshooting steps.`;
                 return false;
             }
 
-            // Extract phone if available in email text
-            const phoneMatch = emailText.match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
-            const phone = phoneMatch ? phoneMatch[0] : null;
-
-            // Determine category and priority from email content
-            const emailContent = (email.subject + ' ' + emailText).toLowerCase();
-            let category: 'service_quality' | 'delayed_response' | 'incorrect_assessment' | 'billing_issue' | 'communication' | 'data_privacy' | 'other' = 'other';
-            let priority: 'low' | 'medium' | 'high' | 'critical' = 'medium';
-
-            if (emailContent.includes('urgent') || emailContent.includes('critical') || emailContent.includes('immediate')) {
-                priority = 'critical';
-            } else if (emailContent.includes('important') || emailContent.includes('asap')) {
-                priority = 'high';
-            }
-
-            if (emailContent.includes('billing') || emailContent.includes('invoice') || emailContent.includes('payment')) {
-                category = 'billing_issue';
-            } else if (emailContent.includes('service') || emailContent.includes('quality') || emailContent.includes('work')) {
-                category = 'service_quality';
-            } else if (emailContent.includes('communication') || emailContent.includes('response') || emailContent.includes('reply')) {
-                category = 'communication';
-            }
-
             // Import Database type
             type ComplaintInsert = import('@/server/lib/types/database.types').Database['public']['Tables']['complaints']['Insert'];
 
             const complaintData: ComplaintInsert = {
-                complainant_name: senderName,
-                complainant_email: senderEmail.toLowerCase(),
+                complainant_name: complainantName,
+                complainant_email: complainantEmail,
                 complainant_phone: phone,
                 category,
                 priority,
                 description: description.trim(),
+                assessment_id: assessmentId,
                 status: 'new',
                 metadata: {
                     source: 'email',
                     emailId: String(emailId),
                     emailSubject: email.subject || null,
                     emailReceivedAt: email.date?.toISOString() || null,
+                    claudeExtraction: useClaudeData ? {
+                        confidence: claudeExtractionResult?.confidence,
+                        extractionNotes: claudeExtractionResult?.extraction_notes,
+                    } : undefined,
                 },
             };
 
@@ -1351,8 +1525,9 @@ Check the error logs above for detailed troubleshooting steps.`;
                 }. Subject: ${email.subject || 'no subject'}. Claim: ${
                     extractedData.claimReference || 'N/A'
                 }`,
-                authority_confirmed: false,
-                privacy_consent: false,
+                authority_confirmed: true,
+                privacy_consent: true,
+                source: 'email' as any,
             };
 
             const { data: assessment, error } = await (
@@ -1480,18 +1655,155 @@ Check the error logs above for detailed troubleshooting steps.`;
                 }
             }
 
-            // Extract data from email body
-            const extractedData = this.extractDataFromEmail(email);
+            // Claude AI validation: Check if email is a valid claim request
+            const emailBody = email.text || email.html || '';
+            const emailSubject = email.subject || '';
+            const emailFrom = email.from?.text || email.from?.value?.[0]?.address || '';
+            
+            logger.debug('Validating email with Claude AI', {
+                emailId: String(uidOrEmailId),
+                senderEmail: emailFrom,
+            });
+            
+            try {
+                const validationResult = await validateEmailAsClaim(
+                    emailBody,
+                    emailSubject,
+                    emailFrom
+                );
+                
+                logger.info('Claude email validation completed', {
+                    emailId: String(uidOrEmailId),
+                    isValidClaim: validationResult.isValidClaim,
+                    confidence: validationResult.confidence,
+                    reasoning: validationResult.reasoning,
+                });
+                
+                if (!validationResult.isValidClaim) {
+                    logger.warn('Email rejected by Claude validation', {
+                        emailId: String(uidOrEmailId),
+                        senderEmail: emailFrom,
+                        rejectionReason: validationResult.rejectionReason,
+                        isSpam: validationResult.isSpam,
+                        isMarketing: validationResult.isMarketing,
+                        isSystemNotification: validationResult.isSystemNotification,
+                    });
+                    
+                    // Send auto-reply for rejected emails
+                    await this.sendAutoRejectReply(
+                        emailFrom,
+                        validationResult.rejectionReason || 'Email does not appear to be a valid claim or assessment request.'
+                    );
+                    
+                    // Mark email as read (rejected)
+                    await this.markEmailAsRead(uidOrEmailId);
+                    return false;
+                }
+            } catch (validationErr) {
+                logger.error('Claude validation failed, proceeding with caution', validationErr, {
+                    emailId: String(uidOrEmailId),
+                });
+                // On validation error, we'll proceed but log it
+            }
 
-            // Extract data from PDF attachments
-            if (email.attachments && email.attachments.length > 0) {
-                for (const attachment of email.attachments) {
-                    if (attachment.contentType === 'application/pdf') {
-                        const pdfData = await this.extractDataFromPDF(
-                            attachment.content
-                        );
-                        // Merge PDF data with email data
-                        Object.assign(extractedData, pdfData);
+            // Extract data using Claude AI from email body and PDF attachments
+            let extractedData: ExtractedData = {};
+            let claudeExtractionResult = null;
+            
+            try {
+                
+                // Extract text from PDF attachments
+                const pdfTexts: string[] = [];
+                if (email.attachments && email.attachments.length > 0) {
+                    for (const attachment of email.attachments) {
+                        if (attachment.contentType === 'application/pdf') {
+                            try {
+                                const pdfParseModule = await import('pdf-parse');
+                                type PdfParseFunction = (
+                                    data: Buffer
+                                ) => Promise<{ text: string; [key: string]: unknown }>;
+                                const pdfParse: PdfParseFunction =
+                                    'default' in pdfParseModule &&
+                                    typeof pdfParseModule.default === 'function'
+                                        ? (pdfParseModule.default as unknown as PdfParseFunction)
+                                        : (pdfParseModule as unknown as PdfParseFunction);
+                                
+                                const pdfBuffer = Buffer.isBuffer(attachment.content)
+                                    ? attachment.content
+                                    : Buffer.from(attachment.content);
+                                const pdfData = await pdfParse(pdfBuffer);
+                                pdfTexts.push(pdfData.text);
+                            } catch (pdfErr) {
+                                logger.warn('Failed to parse PDF attachment', pdfErr, {
+                                    emailId: String(uidOrEmailId),
+                                    attachmentName: attachment.filename,
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                // Use Claude to extract claim information
+                logger.debug('Extracting claim information using Claude AI', {
+                    emailId: String(uidOrEmailId),
+                    hasPdfAttachments: pdfTexts.length > 0,
+                });
+                
+                claudeExtractionResult = await extractClaimFromEmail(
+                    emailBody,
+                    emailSubject,
+                    emailFrom,
+                    pdfTexts.length > 0 ? pdfTexts : undefined
+                );
+                
+                logger.info('Claude extraction completed', {
+                    emailId: String(uidOrEmailId),
+                    confidence: claudeExtractionResult.confidence,
+                    fieldsExtracted: Object.keys(claudeExtractionResult).length,
+                });
+                
+                // Convert Claude extraction result to ExtractedData format
+                extractedData = {
+                    claimReference: claudeExtractionResult.claim_reference,
+                    vehicleInfo: {
+                        year: claudeExtractionResult.year?.toString(),
+                        make: claudeExtractionResult.make,
+                        model: claudeExtractionResult.model,
+                        registration: claudeExtractionResult.registration,
+                    },
+                    insuredName: claudeExtractionResult.your_name,
+                    incidentDescription: claudeExtractionResult.incident_description,
+                    repairerInfo: {
+                        name: claudeExtractionResult.company_name,
+                        email: claudeExtractionResult.your_email,
+                        phone: claudeExtractionResult.your_phone,
+                    },
+                };
+                
+                // Store full Claude result for assessment creation
+                (extractedData as any).claudeResult = claudeExtractionResult;
+                
+            } catch (claudeErr) {
+                logger.error('Claude extraction failed, falling back to pattern matching', claudeErr, {
+                    emailId: String(uidOrEmailId),
+                });
+                
+                // Fallback to original pattern matching extraction
+                extractedData = this.extractDataFromEmail(email);
+                
+                // Still try to extract from PDFs using old method
+                if (email.attachments && email.attachments.length > 0) {
+                    for (const attachment of email.attachments) {
+                        if (attachment.contentType === 'application/pdf') {
+                            try {
+                                const pdfData = await this.extractDataFromPDF(
+                                    attachment.content
+                                );
+                                Object.assign(extractedData, pdfData);
+                            } catch (pdfErr) {
+                                logger.warn('Failed to extract PDF data', pdfErr);
+                            }
+                        }
                     }
                 }
             }
@@ -1593,6 +1905,45 @@ Check the error logs above for detailed troubleshooting steps.`;
             });
             // Don't throw - email sending failure shouldn't break processing
         }
+    }
+
+    /**
+     * Extract phone number from email content
+     */
+    private extractPhoneFromEmail(
+        email: ParsedMail | {
+            from: { text: string; value: Array<{ address: string }> };
+            subject: string;
+            text: string;
+            html: string | null;
+            attachments: unknown[];
+            date: Date;
+            messageId: string;
+            headers: Record<string, unknown>;
+        }
+    ): string | null {
+        const text = email.text || email.html || '';
+        
+        // Try to extract Australian phone number patterns
+        // Matches: 04XX XXX XXX, (02) XXXX XXXX, +61 4XX XXX XXX, etc.
+        const phonePatterns = [
+            /(\+?61\s?)?(\(?0?[2-9]\)?)\s?(\d{1,4})\s?(\d{1,4})\s?(\d{1,4})/g,
+            /(\+?61\s?)?4\d{2}\s?\d{3}\s?\d{3}/g,
+            /(\(?\d{2}\)?\s?\d{4}\s?\d{4})/g,
+        ];
+        
+        for (const pattern of phonePatterns) {
+            const match = text.match(pattern);
+            if (match && match[0]) {
+                // Clean up the phone number
+                const cleaned = match[0].replace(/\s+/g, ' ').trim();
+                if (cleaned.length >= 8) {
+                    return cleaned;
+                }
+            }
+        }
+        
+        return null;
     }
 
     /**
@@ -1778,6 +2129,7 @@ Check the error logs above for detailed troubleshooting steps.`;
 
     /**
      * Create assessment from email data
+     * Uses Claude extraction result if available, otherwise falls back to pattern matching
      */
     private async createAssessmentFromEmail(
         email: ParsedMail,
@@ -1785,45 +2137,110 @@ Check the error logs above for detailed troubleshooting steps.`;
     ): Promise<string> {
         const fromEmail = email.from?.value[0]?.address || '';
         const fromName = email.from?.value[0]?.name || '';
+        
+        // Check if we have Claude extraction result
+        const claudeResult = (extractedData as any).claudeResult;
+        const useClaudeData = !!claudeResult;
 
-        // Determine company name from email domain
-        const domain = fromEmail.split('@')[1] || '';
-        const companyName =
-            this.getCompanyNameFromDomain(domain) || fromName || domain;
+        // Determine company name
+        let companyName: string;
+        if (useClaudeData && claudeResult.company_name) {
+            companyName = claudeResult.company_name;
+        } else {
+            const domain = fromEmail.split('@')[1] || '';
+            companyName = this.getCompanyNameFromDomain(domain) || fromName || domain;
+        }
 
-        // Parse owner info
-        const ownerInfo: Record<string, string> = {};
-        if (extractedData.insuredName) {
+        // Parse owner info - use Claude data if available
+        const ownerInfo: Record<string, unknown> = {};
+        if (useClaudeData && claudeResult.owner_info) {
+            Object.assign(ownerInfo, claudeResult.owner_info);
+        } else if (extractedData.insuredName) {
             const nameParts = extractedData.insuredName.split(' ');
             ownerInfo.firstName = nameParts[0] || '';
             ownerInfo.lastName = nameParts.slice(1).join(' ') || '';
         }
 
+        // Parse location info from Claude if available
+        const locationInfo: Record<string, unknown> = {};
+        if (useClaudeData && claudeResult.location_info) {
+            Object.assign(locationInfo, claudeResult.location_info);
+        }
+
+        // Build assessment data - prioritize Claude extraction
         const assessmentData: AssessmentInsert = {
             company_name: companyName,
-            your_name: fromName,
-            your_email: fromEmail,
-            your_phone: '', // Not available from email
-            assessment_type: 'Desktop Assessment', // Default
-            claim_reference: extractedData.claimReference || null,
-            make: extractedData.vehicleInfo?.make || '',
-            model: extractedData.vehicleInfo?.model || '',
-            year: extractedData.vehicleInfo?.year
+            your_name: useClaudeData && claudeResult.your_name 
+                ? claudeResult.your_name 
+                : fromName,
+            your_email: useClaudeData && claudeResult.your_email 
+                ? claudeResult.your_email 
+                : fromEmail,
+            your_phone: useClaudeData && claudeResult.your_phone 
+                ? claudeResult.your_phone 
+                : this.extractPhoneFromEmail(email) || '0400000000', // Default placeholder for email imports
+            your_role: useClaudeData ? claudeResult.your_role || null : null,
+            department: useClaudeData ? claudeResult.department || null : null,
+            assessment_type: useClaudeData && claudeResult.assessment_type
+                ? (claudeResult.assessment_type === 'Onsite Assessment' 
+                    ? 'Onsite Assessment' 
+                    : 'Desktop Assessment')
+                : 'Desktop Assessment',
+            claim_reference: useClaudeData && claudeResult.claim_reference
+                ? claudeResult.claim_reference
+                : extractedData.claimReference || null,
+            policy_number: useClaudeData ? claudeResult.policy_number || null : null,
+            incident_date: useClaudeData && claudeResult.incident_date
+                ? claudeResult.incident_date
+                : null,
+            incident_location: useClaudeData && claudeResult.incident_location
+                ? claudeResult.incident_location
+                : null,
+            vehicle_type: useClaudeData ? claudeResult.vehicle_type || null : null,
+            make: useClaudeData && claudeResult.make
+                ? claudeResult.make
+                : extractedData.vehicleInfo?.make || '',
+            model: useClaudeData && claudeResult.model
+                ? claudeResult.model
+                : extractedData.vehicleInfo?.model || '',
+            year: useClaudeData && claudeResult.year
+                ? claudeResult.year
+                : extractedData.vehicleInfo?.year
                 ? parseInt(extractedData.vehicleInfo.year)
                 : null,
-            registration:
-                extractedData.vehicleInfo?.registration?.toUpperCase() || null,
-            owner_info: ownerInfo,
-            incident_description: extractedData.incidentDescription || null,
-            damage_areas: [],
+            registration: useClaudeData && claudeResult.registration
+                ? claudeResult.registration.toUpperCase()
+                : extractedData.vehicleInfo?.registration?.toUpperCase() || null,
+            vin: useClaudeData ? claudeResult.vin?.toUpperCase() || null : null,
+            color: useClaudeData ? claudeResult.color || null : null,
+            odometer: useClaudeData ? claudeResult.odometer || null : null,
+            insurance_value_type: useClaudeData ? claudeResult.insurance_value_type || null : null,
+            insurance_value_amount: useClaudeData ? claudeResult.insurance_value_amount || null : null,
+            owner_info: Object.keys(ownerInfo).length > 0 ? ownerInfo : {},
+            location_info: Object.keys(locationInfo).length > 0 ? locationInfo : {},
+            incident_description: useClaudeData && claudeResult.incident_description
+                ? claudeResult.incident_description
+                : extractedData.incidentDescription || null,
+            damage_areas: useClaudeData && claudeResult.damage_areas
+                ? claudeResult.damage_areas
+                : [],
+            special_instructions: useClaudeData ? claudeResult.special_instructions || null : null,
             status: 'pending', // Needs manual review
             internal_notes: `Imported from email. Source: ${
                 email.from?.value[0]?.address || 'unknown'
-            }. Subject: ${email.subject || 'no subject'}`,
-            authority_confirmed: false,
-            privacy_consent: false,
+            }. Subject: ${email.subject || 'no subject'}. ${
+                useClaudeData 
+                    ? `Claude extraction confidence: ${claudeResult.confidence || 'N/A'}%. ${claudeResult.extraction_notes || ''}`
+                    : 'Extracted using pattern matching.'
+            }`.trim(),
+            // For email-imported assessments, set required consents to true
+            // since they come from authorized email sources
+            authority_confirmed: true,
+            privacy_consent: true,
             email_report_consent: false,
             sms_updates: false,
+            // Set source to 'email' so it appears in the email-processed tab
+            source: 'email' as any,
         };
 
         const { data, error } = await (
