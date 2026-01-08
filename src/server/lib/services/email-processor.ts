@@ -1095,9 +1095,10 @@ Check the error logs above for detailed troubleshooting steps.`;
                                 const pdfData = await pdfParse(pdfBuffer);
                                 pdfTexts.push(pdfData.text);
                             } catch (pdfErr) {
-                                logger.warn('Failed to parse PDF attachment for complaint', pdfErr, {
+                                logger.warn('Failed to parse PDF attachment for complaint', {
                                     emailId: String(emailId),
                                     attachmentName: attachment.filename,
+                                    error: pdfErr instanceof Error ? pdfErr.message : String(pdfErr),
                                 });
                             }
                         }
@@ -1153,12 +1154,12 @@ Check the error logs above for detailed troubleshooting steps.`;
                 // Try to find assessment if reference is provided
                 if (claudeExtractionResult.assessment_reference || claudeExtractionResult.assessment_id) {
                     const assessmentRef = claudeExtractionResult.assessment_reference || claudeExtractionResult.assessment_id;
-                    const { data: assessment } = await this.supabase
+                    const { data: assessment, error: assessmentError } = await this.supabase
                         .from('assessments')
                         .select('id')
                         .or(`id.eq.${assessmentRef},claim_reference.eq.${assessmentRef}`)
-                        .single();
-                    if (assessment) {
+                        .single() as { data: { id: string } | null; error: unknown };
+                    if (!assessmentError && assessment) {
                         assessmentId = assessment.id;
                     }
                 }
@@ -1500,7 +1501,7 @@ Check the error logs above for detailed troubleshooting steps.`;
               }
     ): Promise<boolean> {
         try {
-            const assessmentData: AssessmentInsert = {
+            const assessmentData = {
                 your_name:
                     extractedData.insuredName || email.from?.text || 'Unknown',
                 your_email:
@@ -1527,8 +1528,8 @@ Check the error logs above for detailed troubleshooting steps.`;
                 }`,
                 authority_confirmed: true,
                 privacy_consent: true,
-                source: 'email' as any,
-            };
+                source: 'email',
+            } as AssessmentInsert & { source: string };
 
             const { data: assessment, error } = await (
                 this.supabase.from('assessments') as unknown as {
@@ -1734,9 +1735,10 @@ Check the error logs above for detailed troubleshooting steps.`;
                                 const pdfData = await pdfParse(pdfBuffer);
                                 pdfTexts.push(pdfData.text);
                             } catch (pdfErr) {
-                                logger.warn('Failed to parse PDF attachment', pdfErr, {
+                                logger.warn('Failed to parse PDF attachment', {
                                     emailId: String(uidOrEmailId),
                                     attachmentName: attachment.filename,
+                                    error: pdfErr instanceof Error ? pdfErr.message : String(pdfErr),
                                 });
                             }
                         }
@@ -1801,7 +1803,9 @@ Check the error logs above for detailed troubleshooting steps.`;
                                 );
                                 Object.assign(extractedData, pdfData);
                             } catch (pdfErr) {
-                                logger.warn('Failed to extract PDF data', pdfErr);
+                                logger.warn('Failed to extract PDF data', {
+                                    error: pdfErr instanceof Error ? pdfErr.message : String(pdfErr),
+                                });
                             }
                         }
                     }
@@ -2168,7 +2172,7 @@ Check the error logs above for detailed troubleshooting steps.`;
         }
 
         // Build assessment data - prioritize Claude extraction
-        const assessmentData: AssessmentInsert = {
+        const assessmentData = {
             company_name: companyName,
             your_name: useClaudeData && claudeResult.your_name 
                 ? claudeResult.your_name 
@@ -2240,8 +2244,8 @@ Check the error logs above for detailed troubleshooting steps.`;
             email_report_consent: false,
             sms_updates: false,
             // Set source to 'email' so it appears in the email-processed tab
-            source: 'email' as any,
-        };
+            source: 'email',
+        } as AssessmentInsert & { source: string };
 
         const { data, error } = await (
             this.supabase.from('assessments') as unknown as {
