@@ -64,6 +64,7 @@
     "eslint-config-next": "16.0.7",
     "prettier": "3.0.0-alpha.6",
     "prisma": "^6.19.0",
+    "sql.js": "^1.13.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

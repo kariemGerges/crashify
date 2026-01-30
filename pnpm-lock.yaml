@@ -165,6 +165,9 @@ importers:
       prisma:
         specifier: ^6.19.0
         version: 6.19.0(typescript@5.9.3)
+      sql.js:
+        specifier: ^1.13.0
+        version: 1.13.0
       tailwindcss:
         specifier: ^4
         version: 4.1.14
@@ -3334,6 +3337,9 @@ packages:
   speakeasy@2.0.0:
     resolution: {integrity: sha512-lW2A2s5LKi8rwu77ewisuUOtlCydF/hmQSOJjpTqTj1gZLkNgTaYnyvfxy2WBr4T/h+9c4g8HIITfj83OkFQFw==}
     engines: {node: '>= 0.10.0'}
+
+  sql.js@1.13.0:
+    resolution: {integrity: sha512-RJbVP1HRDlUUXahJ7VMTcu9Rm1Nzw+EBpoPr94vnbD4LwR715F3CcxE2G2k45PewcaZ57pjetYa+LoSJLAASgA==}
 
   ssf@0.11.2:
     resolution: {integrity: sha512-+idbmIXoYET47hH+d7dfm2epdOMUDjqcB4648sTZ+t2JwoyBFL/insLfB/racrDmsKB3diwsDA696pZMieAC5g==}
@@ -7356,6 +7362,8 @@ snapshots:
   speakeasy@2.0.0:
     dependencies:
       base32.js: 0.0.1
+
+  sql.js@1.13.0: {}
 
   ssf@0.11.2:
     dependencies:
