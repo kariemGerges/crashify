@@ -123,7 +123,8 @@ export class CICOPEmailIntegration {
 
       const isComplaint = complaintDetection !== null;
 
-      // Mark as processed
+      // Mark as processed (cicop_processed_emails may be missing from DB types)
+      // @ts-expect-error - table may be missing from generated types
       await supabase.from('cicop_processed_emails').insert({
         email_id: emailId,
         sender,
@@ -138,8 +139,9 @@ export class CICOPEmailIntegration {
         result.sla_started = true;
       }
 
-      // Log complaint if detected
+      // Log complaint if detected (cicop_complaints may be missing from DB types)
       if (isComplaint && complaintDetection) {
+        // @ts-expect-error - table may be missing from generated types
         await supabase.from('cicop_complaints').insert({
           claim_reference: analysis.claim_reference,
           vehicle_rego: analysis.vehicle_rego,
@@ -203,6 +205,7 @@ export class CICOPEmailIntegration {
       const slaHours = urgency === 'urgent' ? 24 : 48;
       const slaDeadline = new Date(Date.now() + slaHours * 60 * 60 * 1000);
 
+      // @ts-expect-error - table may be missing from generated types
       await supabase.from('cicop_sla_tracking').insert({
         claim_reference: claimReference,
         sender,
@@ -232,26 +235,28 @@ export class CICOPEmailIntegration {
     try {
       const supabase = createServerClient();
 
-      // Check if auto-reply is enabled
-      const { data: config } = await supabase
+      // Check if auto-reply is enabled (cicop_config may be missing from DB types)
+      const { data: configRow } = await supabase
         .from('cicop_config')
         .select('value')
         .eq('key', 'auto_reply_enabled')
         .single();
+      const config = configRow as { value?: boolean } | null;
 
       if (!config || config.value === false) {
         console.log('⏭️  Auto-reply disabled');
         return false;
       }
 
-      // Get email template
-      const { data: template } = await supabase
+      // Get email template (cicop_email_templates may be missing from DB types)
+      const { data: templateRow } = await supabase
         .from('cicop_email_templates')
         .select('subject_template, body_template, variables')
         .eq('template_name', 'default_acknowledgment')
         .single();
+      const template = templateRow as { subject_template?: string; body_template?: string; variables?: unknown } | null;
 
-      if (!template) {
+      if (!template || !template.subject_template || !template.body_template) {
         console.error('❌ No email template found');
         return false;
       }
@@ -312,6 +317,7 @@ export class CICOPEmailIntegration {
       console.log(`✅ Auto-response sent to ${recipient}`);
 
       // Log to audit
+      // @ts-expect-error - table may be missing from generated types
       await supabase.from('cicop_audit_log').insert({
         event_type: 'auto_response',
         action: 'email_sent',
@@ -345,14 +351,15 @@ export class CICOPEmailIntegration {
       // Analyze email first
       const analysis = await cicopAIService.analyzeEmail(emailData);
 
-      // Get template
-      const { data: template } = await supabase
+      // Get template (cicop_email_templates may be missing from DB types)
+      const { data: templateRow } = await supabase
         .from('cicop_email_templates')
         .select('subject_template, body_template')
         .eq('template_name', 'default_acknowledgment')
         .single();
+      const template = templateRow as { subject_template?: string; body_template?: string } | null;
 
-      if (!template) {
+      if (!template || !template.subject_template || !template.body_template) {
         throw new Error('Template not found');
       }
 

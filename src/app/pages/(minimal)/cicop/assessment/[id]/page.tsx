@@ -107,8 +107,8 @@ export default function AssessmentDetailPage({
                     Assessment #{String(assessment.assessment_no)}
                 </h1>
                 <p className="text-neutral-500 text-sm mb-8">
-                    {assessment.claim_number && `Claim ${String(assessment.claim_number)}`}
-                    {assessment.status && ` · ${String(assessment.status)}`}
+                    {assessment.claim_number != null ? `Claim ${String(assessment.claim_number)}` : ''}
+                    {assessment.status != null ? ` · ${String(assessment.status)}` : ''}
                 </p>
                 <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 space-y-0">
                     {rows.map(({ label, value }) => (

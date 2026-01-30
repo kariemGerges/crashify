@@ -85,12 +85,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const supabase = createServerClient();
 
-    // Generate assessment number
-    const { data: maxAssessment } = await supabase
+    // Generate assessment number (cicop_assessments may be missing from DB types)
+    const { data: maxAssessmentRows } = await supabase
       .from('cicop_assessments')
       .select('assessment_no')
       .order('assessment_no', { ascending: false })
       .limit(1);
+    const maxAssessment = maxAssessmentRows as { assessment_no: number }[] | null;
 
     const nextAssessmentNo = maxAssessment && maxAssessment.length > 0
       ? maxAssessment[0].assessment_no + 1
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Insert assessment
-    const { data, error } = await supabase
+    const { data: inserted, error } = await supabase
       .from('cicop_assessments')
       .insert(assessmentData)
       .select()
@@ -121,7 +122,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log audit
+    const data = inserted as { claim_number?: string; assessment_no?: number };
+    // Log audit (cicop_audit_log may be missing from DB types)
+    // @ts-expect-error - table may be missing from generated types
     await supabase.from('cicop_audit_log').insert({
       event_type: 'assessment_created',
       action: 'create',

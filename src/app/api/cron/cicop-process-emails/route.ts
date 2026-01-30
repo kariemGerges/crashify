@@ -5,10 +5,9 @@ import { createServerClient } from '@/server/lib/supabase/client';
 /**
  * GET /api/cron/cicop-process-emails
  * Cron job to poll and process emails from Microsoft 365
- * 
- * Set up in Vercel Cron Jobs:
- * - Schedule: */5 * * * * (every 5 minutes)
- * - Or use external cron service
+ *
+ * Set up in Vercel Cron Jobs with schedule: every 5 minutes (e.g. * / 5 * * * *)
+ * Or use an external cron service to hit this endpoint.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -33,8 +32,10 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
     const today = new Date().toISOString().split('T')[0];
     
+    // cicop_daily_stats may be missing from generated DB types
     await supabase
       .from('cicop_daily_stats')
+      // @ts-expect-error - table may be missing from generated types
       .upsert({
         date: today,
         emails_processed: processed,

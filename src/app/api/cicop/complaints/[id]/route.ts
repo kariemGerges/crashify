@@ -7,10 +7,10 @@ import { createServerClient } from '@/server/lib/supabase/client';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const complaintId = params.id;
+    const { id: complaintId } = await params;
     const supabase = createServerClient();
 
     const { data: complaint, error } = await supabase
@@ -43,10 +43,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const complaintId = params.id;
+    const { id: complaintId } = await params;
     const body = await request.json();
     const supabase = createServerClient();
 
@@ -60,13 +60,15 @@ export async function PUT(
       updateData.resolved_at = new Date().toISOString();
     }
 
-    const { data, error } = await supabase
+    const result = await supabase
       .from('cicop_complaints')
+      // @ts-expect-error - cicop_complaints may be missing from generated DB types
       .update(updateData)
       .eq('id', complaintId)
       .select()
       .single();
 
+    const { data, error } = result;
     if (error) {
       console.error('Error updating complaint:', error);
       return NextResponse.json(
@@ -75,16 +77,18 @@ export async function PUT(
       );
     }
 
-    // Log audit
+    const updated = data as { claim_reference?: string; id?: string };
+    // Log audit (cicop_audit_log may be missing from DB types)
+    // @ts-expect-error - table may be missing from generated types
     await supabase.from('cicop_audit_log').insert({
       event_type: 'complaint_updated',
       action: body.resolved ? 'resolved' : 'update',
-      claim_reference: data.claim_reference,
-      details: { complaint_id: data.id, changes: Object.keys(body) },
+      claim_reference: updated.claim_reference,
+      details: { complaint_id: updated.id, changes: Object.keys(body) },
       success: true
     });
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data: result.data });
 
   } catch (error: any) {
     console.error('Error in complaint PUT API:', error);
@@ -101,18 +105,19 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const complaintId = params.id;
+    const { id: complaintId } = await params;
     const supabase = createServerClient();
 
-    // Get complaint before deleting for audit
-    const { data: complaint } = await supabase
+    // Get complaint before deleting for audit (cicop_complaints may be missing from DB types)
+    const { data: complaintRow } = await supabase
       .from('cicop_complaints')
       .select('claim_reference')
       .eq('id', complaintId)
       .single();
+    const complaint = complaintRow as { claim_reference?: string } | null;
 
     const { error } = await supabase
       .from('cicop_complaints')
@@ -127,7 +132,8 @@ export async function DELETE(
       );
     }
 
-    // Log audit
+    // Log audit (cicop_audit_log may be missing from DB types)
+    // @ts-expect-error - table may be missing from generated types
     await supabase.from('cicop_audit_log').insert({
       event_type: 'complaint_deleted',
       action: 'delete',

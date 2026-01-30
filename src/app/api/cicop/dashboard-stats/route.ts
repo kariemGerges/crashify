@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
                 .lte('date_received', range.to);
         }
 
-        const { data: assessments, error } = await query;
+        const { data: assessmentsRows, error } = await query;
 
         if (error) {
             console.error('Error fetching assessments:', error);
@@ -78,7 +78,20 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        if (!assessments || assessments.length === 0) {
+        type AssessmentRow = {
+            savings?: string | number;
+            repairer_quote?: string | number;
+            crashify_assessed?: string | number;
+            total_loss?: boolean;
+            fraud_flag?: boolean;
+            fraud_amount?: string | number;
+            fraud_indicators?: unknown[];
+            repairer_compliance_score?: number;
+            created_at?: string;
+        };
+        const assessments = (assessmentsRows ?? []) as AssessmentRow[];
+
+        if (assessments.length === 0) {
             return NextResponse.json({
                 total_assessments: 0,
                 total_savings: 0,
@@ -93,31 +106,20 @@ export async function GET(request: NextRequest) {
             });
         }
 
+        const num = (v: string | number | undefined) =>
+            typeof v === 'number' ? (Number.isNaN(v) ? 0 : v) : parseFloat(String(v ?? '')) || 0;
+
         // Calculate total savings
-        const totalSavings = assessments.reduce((sum, a) => {
-            const savings = parseFloat(a.savings) || 0;
-            return sum + savings;
-        }, 0);
+        const totalSavings = assessments.reduce((sum, a) => sum + num(a.savings), 0);
 
         // Calculate total quoted and assessed amounts
-        const totalQuoted = assessments.reduce((sum, a) => {
-            const quote = parseFloat(a.repairer_quote) || 0;
-            return sum + quote;
-        }, 0);
-
-        const totalAssessed = assessments.reduce((sum, a) => {
-            const assessed = parseFloat(a.crashify_assessed) || 0;
-            return sum + assessed;
-        }, 0);
+        const totalQuoted = assessments.reduce((sum, a) => sum + num(a.repairer_quote), 0);
+        const totalAssessed = assessments.reduce((sum, a) => sum + num(a.crashify_assessed), 0);
 
         // Count prevented total losses (vehicles marked as total_loss but saved)
-        const preventedTotalLosses = assessments.filter(a => {
-            // Count assessments where total_loss flag is false but vehicle was high-value
-            return (
-                a.total_loss === false &&
-                (parseFloat(a.repairer_quote) || 0) > 15000
-            );
-        }).length;
+        const preventedTotalLosses = assessments.filter(a =>
+            a.total_loss === false && num(a.repairer_quote) > 15000
+        ).length;
 
         // Count fraud cases (assessments with fraud indicators)
         const fraudCases = assessments.filter(a => {
@@ -136,10 +138,7 @@ export async function GET(request: NextRequest) {
                     Array.isArray(a.fraud_indicators) &&
                     a.fraud_indicators.length > 0
             )
-            .reduce((sum, a) => {
-                const quote = parseFloat(a.repairer_quote) || 0;
-                return sum + quote * 0.1; // Estimate 10% fraud markup
-            }, 0);
+            .reduce((sum, a) => sum + num(a.repairer_quote) * 0.1, 0);
 
         // Calculate average savings percentage
         const avgSavingsPercentage =
@@ -178,7 +177,7 @@ export async function GET(request: NextRequest) {
                 const createdAt = a.created_at ? new Date(a.created_at) : null;
                 return createdAt && createdAt >= firstDayOfMonth;
             })
-            .reduce((sum, a) => sum + (parseFloat(a.savings) || 0), 0);
+            .reduce((sum, a) => sum + num(a.savings), 0);
 
         const currentMonthPreventedLosses = assessments.filter(a => {
             const createdAt = a.created_at ? new Date(a.created_at) : null;
@@ -186,7 +185,7 @@ export async function GET(request: NextRequest) {
                 createdAt &&
                 createdAt >= firstDayOfMonth &&
                 a.total_loss === false &&
-                (parseFloat(a.repairer_quote) || 0) > 15000
+                num(a.repairer_quote) > 15000
             );
         }).length;
 
@@ -210,7 +209,7 @@ export async function GET(request: NextRequest) {
             current_month_savings: currentMonthSavings,
             current_month_savings_formatted:
                 formatCurrency(currentMonthSavings),
-            avg_savings_percentage: parseFloat(avgSavingsPercentage),
+            avg_savings_percentage: Number(avgSavingsPercentage),
 
             // Prevented total losses
             prevented_total_losses: preventedTotalLosses,
@@ -228,7 +227,7 @@ export async function GET(request: NextRequest) {
             total_assessed_formatted: formatCurrency(totalAssessed),
 
             // Ratios
-            total_loss_ratio: parseFloat(totalLossRatio),
+            total_loss_ratio: Number(totalLossRatio),
             compliance_rate: complianceRate,
 
             // Value preserved from prevented total losses

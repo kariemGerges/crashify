@@ -7,10 +7,11 @@ import { createServerClient } from '@/server/lib/supabase/client';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const assessmentNo = parseInt(params.id);
+    const { id } = await params;
+    const assessmentNo = parseInt(id);
     
     if (isNaN(assessmentNo)) {
       return NextResponse.json(
@@ -33,17 +34,19 @@ export async function GET(
       );
     }
 
+    const assessmentObj = assessment as Record<string, unknown>;
+
     // Calculate completeness
-    const fields = Object.keys(assessment).filter(k => !k.startsWith('_') && k !== 'id');
+    const fields = Object.keys(assessmentObj).filter(k => !k.startsWith('_') && k !== 'id');
     const filled = fields.filter(k => {
-      const val = assessment[k];
+      const val = assessmentObj[k];
       return val !== null && val !== '' && val !== undefined;
     }).length;
     const total = fields.length;
     const percentage = Math.round((filled / total) * 100 * 10) / 10;
 
     return NextResponse.json({
-      ...assessment,
+      ...assessmentObj,
       _completeness: {
         filled,
         total,
@@ -67,10 +70,11 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const assessmentNo = parseInt(params.id);
+    const { id } = await params;
+    const assessmentNo = parseInt(id);
     
     if (isNaN(assessmentNo)) {
       return NextResponse.json(
@@ -79,12 +83,13 @@ export async function PUT(
       );
     }
 
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
     const supabase = createServerClient();
 
-    // Update assessment
-    const { data, error } = await supabase
-      .from('cicop_assessments')
+    // Update assessment (cicop_assessments may be missing from generated DB types)
+    const q = supabase.from('cicop_assessments');
+    const result = await q
+      // @ts-expect-error - table may be missing from generated types, update payload is valid at runtime
       .update({
         ...body,
         last_updated: new Date().toISOString()
@@ -93,6 +98,7 @@ export async function PUT(
       .select()
       .single();
 
+    const { data, error } = result;
     if (error) {
       console.error('Error updating assessment:', error);
       return NextResponse.json(
@@ -101,12 +107,14 @@ export async function PUT(
       );
     }
 
-    // Log audit
+    const updated = data as { claim_number?: string; assessment_no?: number };
+    // Log audit (cicop_audit_log may be missing from generated DB types)
+    // @ts-expect-error - table may be missing from generated types
     await supabase.from('cicop_audit_log').insert({
       event_type: 'assessment_updated',
       action: 'update',
-      claim_reference: data.claim_number,
-      details: { assessment_no: data.assessment_no, changes: Object.keys(body) },
+      claim_reference: updated.claim_number,
+      details: { assessment_no: updated.assessment_no, changes: Object.keys(body) },
       success: true
     });
 
@@ -127,10 +135,11 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const assessmentNo = parseInt(params.id);
+    const { id } = await params;
+    const assessmentNo = parseInt(id);
     
     if (isNaN(assessmentNo)) {
       return NextResponse.json(
@@ -141,12 +150,13 @@ export async function DELETE(
 
     const supabase = createServerClient();
 
-    // Get assessment before deleting for audit
-    const { data: assessment } = await supabase
+    // Get assessment before deleting for audit (cicop_assessments may be missing from DB types)
+    const { data: assessmentRow } = await supabase
       .from('cicop_assessments')
       .select('claim_number')
       .eq('assessment_no', assessmentNo)
       .single();
+    const assessment = assessmentRow as { claim_number?: string } | null;
 
     // Delete assessment
     const { error } = await supabase
@@ -162,11 +172,12 @@ export async function DELETE(
       );
     }
 
-    // Log audit
+    // Log audit (cicop_audit_log may be missing from generated DB types)
+    // @ts-expect-error - table may be missing from generated types
     await supabase.from('cicop_audit_log').insert({
       event_type: 'assessment_deleted',
       action: 'delete',
-      claim_reference: assessment?.claim_number,
+      claim_reference: assessment?.claim_number ?? undefined,
       details: { assessment_no: assessmentNo },
       success: true
     });

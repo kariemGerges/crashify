@@ -69,12 +69,15 @@ export async function POST(request: NextRequest) {
       metadata: body.metadata || {}
     };
 
-    const { data, error } = await supabase
+    // cicop_complaints / cicop_audit_log may be missing from generated DB types
+    const result = await supabase
       .from('cicop_complaints')
+      // @ts-expect-error - table may be missing from generated types
       .insert(complaintData)
       .select()
       .single();
 
+    const { data, error } = result;
     if (error) {
       console.error('Error creating complaint:', error);
       return NextResponse.json(
@@ -83,16 +86,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log audit
+    const inserted = data as { claim_reference?: string; id?: string; severity?: string };
+    // @ts-expect-error - table may be missing from generated types
     await supabase.from('cicop_audit_log').insert({
       event_type: 'complaint_created',
       action: 'create',
-      claim_reference: data.claim_reference,
-      details: { complaint_id: data.id, severity: data.severity },
+      claim_reference: inserted.claim_reference,
+      details: { complaint_id: inserted.id, severity: inserted.severity },
       success: true
     });
 
-    return NextResponse.json({ success: true, data }, { status: 201 });
+    return NextResponse.json({ success: true, data: result.data }, { status: 201 });
 
   } catch (error: any) {
     console.error('Error in complaints POST API:', error);

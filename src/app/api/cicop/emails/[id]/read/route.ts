@@ -7,10 +7,10 @@ import { createServerClient } from '@/server/lib/supabase/client';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const emailId = params.id;
+    const { id: emailId } = await params;
     const supabase = createServerClient();
 
     // Update email status (mock for now)

@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createServerClient();
 
-    const { data: complaints, error } = await supabase
+    const { data: complaintsRows, error } = await supabase
       .from('cicop_complaints')
       .select('*');
 
@@ -21,7 +21,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!complaints || complaints.length === 0) {
+    type ComplaintRow = { resolved?: boolean; severity?: string; complaint_type?: string };
+    const complaints = (complaintsRows ?? []) as ComplaintRow[];
+
+    if (complaints.length === 0) {
       return NextResponse.json({
         total: 0,
         unresolved: 0,
