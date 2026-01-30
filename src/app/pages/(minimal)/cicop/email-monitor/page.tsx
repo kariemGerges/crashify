@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { 
-  ArrowLeft, 
-  RefreshCw, 
+import { useSearchParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  RefreshCw,
   Mail,
   MailOpen,
-  AlertTriangle,
   Clock,
   Send,
-  Eye,
-  Trash2
+  Trash2,
 } from 'lucide-react';
 
 interface Email {
@@ -37,7 +36,10 @@ interface DraftResponse {
   body: string;
 }
 
-export default function EmailMonitorPage() {
+function EmailMonitorContent() {
+  const searchParams = useSearchParams();
+  const fromAdmin = searchParams?.get('from') === 'admin';
+  const backHref = fromAdmin ? '/pages/admin?tab=dashboard' : '/pages/cicop';
   const [emails, setEmails] = useState<Email[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [draftResponse, setDraftResponse] = useState<DraftResponse | null>(null);
@@ -48,9 +50,9 @@ export default function EmailMonitorPage() {
 
   useEffect(() => {
     loadEmails();
-    
+
     if (autoRefresh) {
-      const interval = setInterval(loadEmails, 60000); // Every minute
+      const interval = setInterval(loadEmails, 60000);
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);
@@ -71,16 +73,14 @@ export default function EmailMonitorPage() {
 
   const handleEmailClick = async (email: Email) => {
     setSelectedEmail(email);
-    
-    // Mark as read
+
     if (!email.is_read) {
       await fetch(`/api/cicop/emails/${email.id}/read`, { method: 'POST' });
-      setEmails(prev => prev.map(e => 
-        e.id === email.id ? { ...e, is_read: true } : e
-      ));
+      setEmails(prev =>
+        prev.map(e => (e.id === email.id ? { ...e, is_read: true } : e))
+      );
     }
 
-    // Generate draft response
     try {
       const res = await fetch('/api/cicop/emails/generate-response', {
         method: 'POST',
@@ -89,8 +89,8 @@ export default function EmailMonitorPage() {
           email_id: email.id,
           sender: email.sender,
           subject: email.subject,
-          content: email.content
-        })
+          content: email.content,
+        }),
       });
 
       if (res.ok) {
@@ -114,8 +114,8 @@ export default function EmailMonitorPage() {
           email_id: selectedEmail.id,
           to: selectedEmail.sender,
           subject: draftResponse.subject,
-          body: draftResponse.body
-        })
+          body: draftResponse.body,
+        }),
       });
 
       if (res.ok) {
@@ -161,42 +161,46 @@ export default function EmailMonitorPage() {
   const complaintCount = emails.filter(e => e.is_complaint).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white font-sans antialiased p-6">
       <div className="max-w-[1800px] mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6 bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+        <div className="flex justify-between items-center mb-6 rounded-xl border border-amber-500/20 bg-gray-900/50 p-6">
           <div className="flex items-center gap-4">
             <Link
-              href="/pages/cicop"
-              className="p-2 bg-orange-500/20 border border-orange-500 rounded-lg hover:bg-orange-500/30 transition-colors"
+              href={backHref}
+              className="p-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-all duration-200 active:scale-95 text-gray-400 hover:text-white"
             >
               <ArrowLeft size={20} />
             </Link>
             <div>
-              <h1 className="text-3xl font-extrabold bg-gradient-to-r from-white to-orange-500 bg-clip-text text-transparent">
-                📧 Email Monitoring
+              <h1 className="text-xl font-semibold text-white">
+                Email Monitoring
               </h1>
-              <p className="text-slate-400 text-sm mt-1">
-                {unreadCount} unread • {slaCount} with SLA • {complaintCount} complaints
+              <p className="text-gray-500 text-sm mt-0.5">
+                {unreadCount} unread · {slaCount} with SLA · {complaintCount}{' '}
+                complaints
               </p>
             </div>
           </div>
 
           <div className="flex gap-3 items-center">
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm text-gray-400">
               <input
                 type="checkbox"
                 checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="w-4 h-4 rounded"
+                onChange={e => setAutoRefresh(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-amber-500 focus:ring-amber-500/50"
               />
               Auto-refresh (1m)
             </label>
             <button
               onClick={loadEmails}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 border border-blue-500 rounded-lg hover:bg-blue-500/30 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white text-sm font-medium transition-all duration-200 active:scale-[0.98]"
             >
-              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+              <RefreshCw
+                size={18}
+                className={loading ? 'animate-spin' : ''}
+              />
               Refresh
             </button>
           </div>
@@ -204,29 +208,54 @@ export default function EmailMonitorPage() {
 
         {/* Filter Tabs */}
         <div className="flex gap-2 mb-6">
-          <FilterTab label="All" count={emails.length} active={filter === 'all'} onClick={() => setFilter('all')} />
-          <FilterTab label="Unread" count={unreadCount} active={filter === 'unread'} onClick={() => setFilter('unread')} />
-          <FilterTab label="SLA Active" count={slaCount} active={filter === 'sla'} onClick={() => setFilter('sla')} />
-          <FilterTab label="Complaints" count={complaintCount} active={filter === 'complaints'} onClick={() => setFilter('complaints')} />
+          <FilterTab
+            label="All"
+            count={emails.length}
+            active={filter === 'all'}
+            onClick={() => setFilter('all')}
+          />
+          <FilterTab
+            label="Unread"
+            count={unreadCount}
+            active={filter === 'unread'}
+            onClick={() => setFilter('unread')}
+          />
+          <FilterTab
+            label="SLA Active"
+            count={slaCount}
+            active={filter === 'sla'}
+            onClick={() => setFilter('sla')}
+          />
+          <FilterTab
+            label="Complaints"
+            count={complaintCount}
+            active={filter === 'complaints'}
+            onClick={() => setFilter('complaints')}
+          />
         </div>
 
         {/* Email Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Email List */}
-          <div className="lg:col-span-1 bg-white/5 backdrop-blur-lg rounded-xl border border-white/20 overflow-hidden">
-            <div className="p-4 bg-white/5 border-b border-white/20">
-              <h2 className="font-bold">Inbox ({filteredEmails.length})</h2>
+          <div className="lg:col-span-1 rounded-xl border border-amber-500/20 bg-gray-900/50 overflow-hidden">
+            <div className="p-4 border-b border-amber-500/20">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest">
+                Inbox ({filteredEmails.length})
+              </h2>
             </div>
             <div className="overflow-y-auto max-h-[calc(100vh-300px)]">
               {loading ? (
-                <div className="p-8 text-center text-slate-400">
-                  <RefreshCw className="animate-spin inline-block" size={24} />
-                  <p className="mt-2">Loading emails...</p>
+                <div className="p-8 text-center text-gray-500">
+                  <RefreshCw
+                    className="animate-spin inline-block"
+                    size={24}
+                  />
+                  <p className="mt-2 text-sm">Loading emails...</p>
                 </div>
               ) : filteredEmails.length === 0 ? (
-                <div className="p-8 text-center text-slate-400">
+                <div className="p-8 text-center text-gray-500">
                   <Mail size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>No emails found</p>
+                  <p className="text-sm">No emails found</p>
                 </div>
               ) : (
                 filteredEmails.map(email => (
@@ -247,52 +276,76 @@ export default function EmailMonitorPage() {
             {selectedEmail ? (
               <>
                 {/* Email Detail */}
-                <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-1">
-                      <h2 className="text-xl font-bold mb-2">{selectedEmail.subject}</h2>
-                      <div className="text-sm text-slate-400 space-y-1">
-                        <div><strong>From:</strong> {selectedEmail.sender}</div>
-                        <div><strong>Received:</strong> {new Date(selectedEmail.received_at).toLocaleString()}</div>
+                      <h2 className="text-lg font-semibold text-white mb-2">
+                        {selectedEmail.subject}
+                      </h2>
+                      <div className="text-sm text-gray-500 space-y-1">
+                        <div>
+                          <span className="text-gray-400">From:</span>{' '}
+                          {selectedEmail.sender}
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Received:</span>{' '}
+                          {new Date(
+                            selectedEmail.received_at
+                          ).toLocaleString()}
+                        </div>
                         {selectedEmail.analysis?.claim_reference && (
-                          <div><strong>Claim Ref:</strong> {selectedEmail.analysis.claim_reference}</div>
+                          <div>
+                            <span className="text-gray-400">Claim Ref:</span>{' '}
+                            {selectedEmail.analysis.claim_reference}
+                          </div>
                         )}
                         {selectedEmail.analysis?.vehicle_rego && (
-                          <div><strong>Rego:</strong> {selectedEmail.analysis.vehicle_rego}</div>
+                          <div>
+                            <span className="text-gray-400">Rego:</span>{' '}
+                            {selectedEmail.analysis.vehicle_rego}
+                          </div>
                         )}
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
                       {selectedEmail.has_sla && (
-                        <SLABadge hoursRemaining={selectedEmail.sla_hours_remaining} />
+                        <SLABadge
+                          hoursRemaining={
+                            selectedEmail.sla_hours_remaining
+                          }
+                        />
                       )}
                       {selectedEmail.is_complaint && (
-                        <span className="px-3 py-1 bg-red-500/20 border border-red-500 rounded-full text-xs font-semibold text-red-400">
-                          ⚠️ Complaint
+                        <span className="px-3 py-1 rounded-lg border border-red-500/50 bg-red-500/10 text-xs font-semibold text-red-400">
+                          Complaint
                         </span>
                       )}
                       {selectedEmail.analysis?.urgency === 'urgent' && (
-                        <span className="px-3 py-1 bg-orange-500/20 border border-orange-500 rounded-full text-xs font-semibold text-orange-400">
-                          🔥 Urgent
+                        <span className="px-3 py-1 rounded-lg border border-red-500/50 bg-red-500/10 text-xs font-semibold text-red-400">
+                          Urgent
                         </span>
                       )}
                     </div>
                   </div>
-                  
-                  <div className="bg-white/5 rounded-lg p-4 border border-white/10 mt-4">
-                    <div className="whitespace-pre-wrap text-sm">{selectedEmail.content}</div>
+
+                  <div className="rounded-lg border border-gray-700 bg-black/30 p-4 mt-4">
+                    <div className="whitespace-pre-wrap text-sm text-gray-300">
+                      {selectedEmail.content}
+                    </div>
                   </div>
                 </div>
 
                 {/* Draft Response */}
                 {draftResponse && (
-                  <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                  <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 p-6">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-bold">Draft Response</h3>
+                      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">
+                        Draft Response
+                      </h3>
                       <button
                         onClick={handleSendResponse}
                         disabled={sending}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500 rounded-lg hover:bg-green-500/30 transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-600 hover:to-red-700 text-white text-sm font-medium transition-all disabled:opacity-50 disabled:pointer-events-none"
                       >
                         <Send size={18} />
                         {sending ? 'Sending...' : 'Send Response'}
@@ -301,22 +354,36 @@ export default function EmailMonitorPage() {
 
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm text-slate-400 mb-2">Subject</label>
+                        <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-2">
+                          Subject
+                        </label>
                         <input
                           type="text"
                           value={draftResponse.subject}
-                          onChange={(e) => setDraftResponse({ ...draftResponse, subject: e.target.value })}
-                          className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-orange-500"
+                          onChange={e =>
+                            setDraftResponse({
+                              ...draftResponse,
+                              subject: e.target.value,
+                            })
+                          }
+                          className="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-amber-500 transition-colors"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm text-slate-400 mb-2">Body</label>
+                        <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-2">
+                          Body
+                        </label>
                         <textarea
                           value={draftResponse.body}
-                          onChange={(e) => setDraftResponse({ ...draftResponse, body: e.target.value })}
+                          onChange={e =>
+                            setDraftResponse({
+                              ...draftResponse,
+                              body: e.target.value,
+                            })
+                          }
                           rows={12}
-                          className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-orange-500 resize-none"
+                          className="w-full px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-amber-500 transition-colors resize-none"
                         />
                       </div>
                     </div>
@@ -324,9 +391,14 @@ export default function EmailMonitorPage() {
                 )}
               </>
             ) : (
-              <div className="bg-white/5 backdrop-blur-lg rounded-xl p-12 border border-white/20 text-center">
-                <Mail size={64} className="mx-auto mb-4 text-slate-600" />
-                <p className="text-slate-400">Select an email to view details and draft a response</p>
+              <div className="rounded-xl border border-amber-500/20 bg-gray-900/40 p-12 text-center">
+                <Mail
+                  size={64}
+                  className="mx-auto mb-4 text-gray-600"
+                />
+                <p className="text-gray-500 text-sm">
+                  Select an email to view details and draft a response
+                </p>
               </div>
             )}
           </div>
@@ -336,15 +408,36 @@ export default function EmailMonitorPage() {
   );
 }
 
-// Components
-function FilterTab({ label, count, active, onClick }: any) {
+export default function EmailMonitorPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white flex items-center justify-center p-6">
+        <RefreshCw className="animate-spin size-6 text-gray-500" />
+      </div>
+    }>
+      <EmailMonitorContent />
+    </Suspense>
+  );
+}
+
+function FilterTab({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-        active
-          ? 'bg-orange-500 text-white'
-          : 'bg-white/10 text-slate-400 hover:bg-white/15'
+      className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 active:scale-[0.98] ${
+          active
+            ? 'bg-gradient-to-r from-amber-500/20 to-red-600/20 text-amber-400 border border-amber-500/50'
+            : 'bg-gray-800 border border-gray-700 text-gray-400 hover:bg-white/5 hover:text-white'
       }`}
     >
       {label} ({count})
@@ -352,59 +445,79 @@ function FilterTab({ label, count, active, onClick }: any) {
   );
 }
 
-function EmailListItem({ email, selected, onClick, onDelete }: any) {
+function EmailListItem({
+  email,
+  selected,
+  onClick,
+  onDelete,
+}: {
+  email: Email;
+  selected: boolean;
+  onClick: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div
-      className={`p-4 border-b border-white/10 cursor-pointer transition-colors ${
-        selected ? 'bg-orange-500/20 border-l-4 border-l-orange-500' : 'hover:bg-white/5'
+      className={`p-4 border-b border-amber-500/20 cursor-pointer transition-all duration-200 last:border-0 ${
+        selected
+          ? 'bg-gradient-to-r from-amber-500/20 to-red-600/20 border-l-4 border-l-amber-500'
+          : 'hover:bg-white/5'
       }`}
       onClick={onClick}
     >
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center gap-2">
           {email.is_read ? (
-            <MailOpen size={16} className="text-slate-500" />
+            <MailOpen size={16} className="text-neutral-500" />
           ) : (
-            <Mail size={16} className="text-orange-500" />
+            <Mail size={16} className="text-red-400" />
           )}
-          <span className={`font-semibold ${email.is_read ? 'text-slate-400' : 'text-white'}`}>
+          <span
+            className={`font-medium text-sm truncate ${
+              email.is_read ? 'text-gray-400' : 'text-white'
+            }`}
+          >
             {email.sender}
           </span>
         </div>
         <button
-          onClick={(e) => {
+          onClick={e => {
             e.stopPropagation();
             onDelete();
           }}
-          className="p-1 hover:bg-red-500/20 rounded transition-colors"
+          className="p-1 rounded-lg hover:bg-red-500/10 text-neutral-500 hover:text-red-400 transition-colors"
         >
-          <Trash2 size={14} className="text-red-400" />
+          <Trash2 size={14} />
         </button>
       </div>
-      
-      <div className={`text-sm mb-1 ${email.is_read ? 'text-slate-500' : 'text-slate-300'}`}>
+
+      <div
+        className={`text-sm mb-1 line-clamp-2 ${
+          email.is_read ? 'text-gray-500' : 'text-gray-300'
+        }`}
+      >
         {email.subject}
       </div>
-      
+
       <div className="flex gap-2 flex-wrap">
         {email.has_sla && (
-          <span className="px-2 py-0.5 bg-teal-500/20 border border-teal-500 rounded text-xs text-teal-400">
+          <span className="px-2 py-0.5 rounded-md bg-gray-700/80 text-gray-400 text-xs font-medium">
             SLA
           </span>
         )}
         {email.is_complaint && (
-          <span className="px-2 py-0.5 bg-red-500/20 border border-red-500 rounded text-xs text-red-400">
+          <span className="px-2 py-0.5 rounded-md bg-red-500/15 text-red-400 text-xs font-medium">
             Complaint
           </span>
         )}
         {email.analysis?.urgency === 'urgent' && (
-          <span className="px-2 py-0.5 bg-orange-500/20 border border-orange-500 rounded text-xs text-orange-400">
+          <span className="px-2 py-0.5 rounded-md bg-red-500/15 text-red-400 text-xs font-medium">
             Urgent
           </span>
         )}
       </div>
-      
-      <div className="text-xs text-slate-500 mt-2">
+
+      <div className="text-[11px] text-gray-500 mt-2">
         {new Date(email.received_at).toLocaleString()}
       </div>
     </div>
@@ -417,16 +530,20 @@ function SLABadge({ hoursRemaining }: { hoursRemaining?: number }) {
   const isOverdue = hoursRemaining < 0;
   const isUrgent = hoursRemaining < 6 && hoursRemaining >= 0;
 
-  const getColor = () => {
-    if (isOverdue) return 'bg-red-500/20 border-red-500 text-red-400';
-    if (isUrgent) return 'bg-orange-500/20 border-orange-500 text-orange-400';
-    return 'bg-teal-500/20 border-teal-500 text-teal-400';
-  };
+  const colorClass = isOverdue
+    ? 'border-red-500/50 bg-red-500/10 text-red-400'
+    : isUrgent
+      ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+      : 'border-amber-500/20 bg-gray-900/50 text-gray-300';
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-semibold ${getColor()}`}>
+    <div
+      className={`flex items-center gap-2 px-3 py-1 rounded-lg border text-xs font-semibold ${colorClass}`}
+    >
       <Clock size={14} />
-      {isOverdue ? `${Math.abs(hoursRemaining).toFixed(1)}h overdue` : `${hoursRemaining.toFixed(1)}h left`}
+      {isOverdue
+        ? `${Math.abs(hoursRemaining).toFixed(1)}h overdue`
+        : `${hoursRemaining.toFixed(1)}h left`}
     </div>
   );
 }

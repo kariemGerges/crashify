@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { 
   ArrowLeft, 
   Search, 
@@ -35,7 +36,10 @@ interface Assessment {
   risk_level?: string;
 }
 
-export default function AssessmentBrowserPage() {
+function AssessmentBrowserContent() {
+  const searchParams = useSearchParams();
+  const fromAdmin = searchParams?.get('from') === 'admin';
+  const backHref = fromAdmin ? '/pages/admin?tab=dashboard' : '/pages/cicop';
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [filteredAssessments, setFilteredAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,16 +212,16 @@ export default function AssessmentBrowserPage() {
   const uniqueInsurers = [...new Set(assessments.map(a => a.insurer).filter(Boolean))];
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white font-sans antialiased p-6">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white font-sans antialiased p-6">
       <div className="max-w-[1800px] mx-auto">
-        <div className="flex justify-between items-center mb-6 rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6">
+        <div className="flex justify-between items-center mb-6 rounded-xl border border-amber-500/20 bg-gray-900/50 p-6">
           <div className="flex items-center gap-4">
-            <Link href="/pages/cicop" className="p-2 rounded-xl bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 transition-colors">
+            <Link href={backHref} className="p-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-400 hover:text-white transition-all duration-200 active:scale-95">
               <ArrowLeft size={20} />
             </Link>
             <div>
               <h1 className="text-xl font-semibold text-white">Assessment Browser</h1>
-              <p className="text-neutral-500 text-sm mt-0.5">
+              <p className="text-gray-500 text-sm mt-0.5">
                 {filteredAssessments.length} of {assessments.length} assessments
                 {selectedIds.length > 0 && ` · ${selectedIds.length} selected`}
               </p>
@@ -225,31 +229,31 @@ export default function AssessmentBrowserPage() {
           </div>
           <div className="flex gap-3">
             {selectedIds.length > 0 && (
-              <button onClick={handleBulkDelete} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
+              <button onClick={handleBulkDelete} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-600 hover:to-red-700 text-white text-sm font-medium transition-all">
                 <Trash2 size={18} /> Delete Selected
               </button>
             )}
-            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-white text-sm font-medium transition-colors">
+            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white text-sm font-medium transition-all duration-200 active:scale-[0.98]">
               <Download size={18} /> Export CSV
             </button>
-            <button onClick={loadAssessments} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-white text-sm font-medium transition-colors">
+            <button onClick={loadAssessments} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white text-sm font-medium transition-colors">
               <RefreshCw size={18} className={loading ? 'animate-spin' : ''} /> Refresh
             </button>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-4 mb-6">
+        <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 p-4 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Search */}
             <div className="md:col-span-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                 <input
                   type="text"
                   placeholder="Search by claim #, rego, customer, vehicle..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
+                  className="w-full pl-10 pr-4 py-2 bg-gray-800/80 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-gray-600"
                 />
               </div>
             </div>
@@ -259,7 +263,7 @@ export default function AssessmentBrowserPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-white focus:outline-none focus:border-neutral-600"
+                className="w-full px-3 py-2 bg-gray-800/80 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-gray-600"
               >
                 <option value="all">All Statuses</option>
                 {uniqueStatuses.map(status => (
@@ -273,7 +277,7 @@ export default function AssessmentBrowserPage() {
               <select
                 value={insurerFilter}
                 onChange={(e) => setInsurerFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-neutral-800/80 border border-neutral-700 rounded-xl text-white focus:outline-none focus:border-neutral-600"
+                className="w-full px-3 py-2 bg-gray-800/80 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-gray-600"
               >
                 <option value="all">All Insurers</option>
                 {uniqueInsurers.map(insurer => (
@@ -284,10 +288,10 @@ export default function AssessmentBrowserPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 overflow-hidden">
+        <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-neutral-800/80 border-b border-neutral-700">
+              <thead className="bg-gray-800/80 border-b border-gray-700">
                 <tr>
                   <th className="p-3 text-left">
                     <input
@@ -301,32 +305,32 @@ export default function AssessmentBrowserPage() {
                   <SortableHeader field="claim_number" label="Claim #" current={sortField} direction={sortDirection} onClick={handleSort} />
                   <SortableHeader field="status" label="Status" current={sortField} direction={sortDirection} onClick={handleSort} />
                   <SortableHeader field="customer_name" label="Customer" current={sortField} direction={sortDirection} onClick={handleSort} />
-                  <th className="p-3 text-left text-xs font-semibold text-neutral-400 uppercase">Vehicle</th>
+                  <th className="p-3 text-left text-xs font-semibold text-gray-400 uppercase">Vehicle</th>
                   <SortableHeader field="rego" label="Rego" current={sortField} direction={sortDirection} onClick={handleSort} />
                   <SortableHeader field="insurer" label="Insurer" current={sortField} direction={sortDirection} onClick={handleSort} />
-                  <th className="p-3 text-left text-xs font-semibold text-neutral-400 uppercase">Savings</th>
-                  <th className="p-3 text-left text-xs font-semibold text-neutral-400 uppercase">Completeness</th>
+                  <th className="p-3 text-left text-xs font-semibold text-gray-400 uppercase">Savings</th>
+                  <th className="p-3 text-left text-xs font-semibold text-gray-400 uppercase">Completeness</th>
                   <SortableHeader field="date_received" label="Date" current={sortField} direction={sortDirection} onClick={handleSort} />
-                  <th className="p-3 text-left text-xs font-semibold text-neutral-400 uppercase">Actions</th>
+                  <th className="p-3 text-left text-xs font-semibold text-gray-400 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={12} className="p-8 text-center text-neutral-500">
+                    <td colSpan={12} className="p-8 text-center text-gray-500">
                       <RefreshCw className="animate-spin inline-block mr-2" size={20} />
                       Loading assessments...
                     </td>
                   </tr>
                 ) : paginatedAssessments.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="p-8 text-center text-neutral-500">
+                    <td colSpan={12} className="p-8 text-center text-gray-500">
                       No assessments found
                     </td>
                   </tr>
                 ) : (
                   paginatedAssessments.map((assessment) => (
-                    <tr key={assessment.id} className="border-b border-neutral-800 hover:bg-neutral-800/40 transition-colors">
+                    <tr key={assessment.id} className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors duration-200">
                       <td className="p-3">
                         <input
                           type="checkbox"
@@ -359,10 +363,10 @@ export default function AssessmentBrowserPage() {
                       </td>
                       <td className="p-3">
                         <div className="flex gap-2">
-                          <Link href={`/pages/cicop/assessment/${assessment.assessment_no}`} className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 transition-colors" title="View">
+                          <Link href={`/pages/cicop/assessment/${assessment.assessment_no}${fromAdmin ? '?from=admin' : ''}`} className="p-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-colors" title="View">
                             <Eye size={16} />
                           </Link>
-                          <Link href={`/pages/cicop/assessment/${assessment.assessment_no}/edit`} className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 transition-colors" title="Edit">
+                          <Link href={`/pages/cicop/assessment/${assessment.assessment_no}/edit${fromAdmin ? '?from=admin' : ''}`} className="p-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-colors" title="Edit">
                             <Edit size={16} />
                           </Link>
                           <button onClick={() => handleDelete(assessment.id, assessment.assessment_no)} className="p-2 rounded-lg bg-red-500/20 border border-red-500/50 hover:bg-red-500/30 transition-colors" title="Delete">
@@ -379,15 +383,15 @@ export default function AssessmentBrowserPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-between items-center p-4 bg-neutral-800/40 border-t border-neutral-700">
-              <div className="text-sm text-neutral-500">
+            <div className="flex justify-between items-center p-4 bg-gray-800/40 border-t border-gray-700">
+              <div className="text-sm text-gray-500">
                 Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredAssessments.length)} of {filteredAssessments.length}
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 rounded-lg bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -399,7 +403,7 @@ export default function AssessmentBrowserPage() {
                         key={page}
                         onClick={() => setCurrentPage(page)}
                         className={`px-3 py-1 rounded-lg transition-colors ${
-                          currentPage === page ? 'bg-red-600 text-white' : 'bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-white'
+                          currentPage === page ? 'bg-gradient-to-r from-amber-500 to-red-600 text-white' : 'bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white'
                         }`}
                       >
                         {page}
@@ -411,7 +415,7 @@ export default function AssessmentBrowserPage() {
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1 rounded-lg bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -424,15 +428,27 @@ export default function AssessmentBrowserPage() {
   );
 }
 
+export default function AssessmentBrowserPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white flex items-center justify-center p-6">
+        <RefreshCw className="animate-spin size-6 text-gray-500" />
+      </div>
+    }>
+      <AssessmentBrowserContent />
+    </Suspense>
+  );
+}
+
 // Helper Components
 function SortableHeader({ field, label, current, direction, onClick }: any) {
   const isActive = current === field;
   
   return (
-    <th className="p-3 text-left text-xs font-semibold text-neutral-400 uppercase cursor-pointer hover:text-white transition-colors" onClick={() => onClick(field)}>
+    <th className="p-3 text-left text-xs font-semibold text-gray-400 uppercase cursor-pointer hover:text-white transition-colors" onClick={() => onClick(field)}>
       <div className="flex items-center gap-2">
         {label}
-        <ArrowUpDown size={14} className={isActive ? 'text-red-400' : 'text-neutral-500'} />
+        <ArrowUpDown size={14} className={isActive ? 'text-red-400' : 'text-gray-500'} />
       </div>
     </th>
   );
@@ -441,11 +457,11 @@ function SortableHeader({ field, label, current, direction, onClick }: any) {
 function StatusBadge({ status }: { status?: string }) {
   const colors: Record<string, string> = {
     'Completed': 'bg-red-500/15 border-red-500/50 text-red-400',
-    'In Progress': 'bg-neutral-600/30 border-neutral-500 text-neutral-300',
-    'Pending': 'bg-neutral-600/30 border-neutral-500 text-neutral-400',
+    'In Progress': 'bg-gray-600/30 border-gray-500 text-gray-300',
+    'Pending': 'bg-gray-600/30 border-gray-500 text-gray-400',
     'On Hold': 'bg-red-500/15 border-red-500/50 text-red-400',
   };
-  const colorClass = colors[status || ''] || 'bg-neutral-600/30 border-neutral-600 text-neutral-400';
+  const colorClass = colors[status || ''] || 'bg-gray-600/30 border-gray-600 text-gray-400';
   return <span className={`px-2 py-0.5 rounded-lg text-[11px] font-medium border ${colorClass}`}>{status || 'Unknown'}</span>;
 }
 
@@ -454,10 +470,10 @@ function CompletenessBar({ percentage }: { percentage: number }) {
   const isMid = percentage >= 50;
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-        <div className={`h-full transition-all ${isHigh ? 'bg-red-500' : isMid ? 'bg-neutral-500' : 'bg-red-500/70'}`} style={{ width: `${percentage}%` }} />
+      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div className={`h-full transition-all ${isHigh ? 'bg-red-500' : isMid ? 'bg-gray-500' : 'bg-red-500/70'}`} style={{ width: `${percentage}%` }} />
       </div>
-      <span className="text-[11px] font-medium tabular-nums w-8 text-right text-neutral-400">{percentage}%</span>
+      <span className="text-[11px] font-medium tabular-nums w-8 text-right text-gray-400">{percentage}%</span>
     </div>
   );
 }

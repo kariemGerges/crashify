@@ -22,7 +22,11 @@ import {
     MessageSquare,
     X,
     Receipt,
+    LayoutDashboard,
+    PanelLeftClose,
+    PanelLeft,
 } from 'lucide-react';
+import { CICOPDashboardContent } from '@/app/pages/(minimal)/cicop/page';
 import { AddUserModal } from '@/app/components/Admin/AddUserModal';
 import { api } from '@/app/actions/getUser';
 import Logo from '../logo';
@@ -53,8 +57,10 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     // State for the active tab - initialize from URL if available
     const [activeTab, setActiveTab] = useState(() => {
         const tabFromUrl = searchParams?.get('tab');
-        return tabFromUrl || 'assessments';
+        return tabFromUrl || 'dashboard';
     });
+    // Sidebar collapsed (icons only) - applies to admin sidebar and CICOP sidebar when on dashboard
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     // Sync activeTab with URL parameter when it changes (only from URL, not from state changes)
     useEffect(() => {
@@ -165,6 +171,19 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
 
     // The menu items for the admin dashboard
     const menuItems = [
+        {
+            id: 'dashboard',
+            icon: LayoutDashboard,
+            label: 'Dashboard',
+            roles: [
+                'super_admin',
+                'admin',
+                'manager',
+                'reviewer',
+                'assessor',
+                'read_only',
+            ],
+        },
         {
             id: 'assessments',
             icon: BarChart3,
@@ -572,7 +591,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                             <NotificationBell />
                             <button
                                 onClick={handleLogout}
-                                className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200 active:scale-95"
                                 title="Logout"
                             >
                                 <LogOut className="w-5 h-5" />
@@ -584,8 +603,20 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
 
             <div className="flex">
                 {/* Sidebar navigation tabs */}
-                <aside className="w-64 bg-gray-900/30 border-r border-amber-500/20 min-h-[calc(100vh-73px)] p-4">
-                    <nav className="space-y-2">
+                <aside className={`${sidebarCollapsed ? 'w-[4.5rem]' : 'w-64'} bg-gray-900/30 border-r border-amber-500/20 min-h-[calc(100vh-73px)] p-3 flex flex-col transition-[width] duration-200 ease-out overflow-hidden`}>
+                    {/* Collapse toggle - top of sidebar for better discoverability */}
+                    <button
+                        type="button"
+                        onClick={() => setSidebarCollapsed(prev => !prev)}
+                        title={sidebarCollapsed ? 'Expand sidebars' : 'Collapse sidebars'}
+                        className={`w-full flex items-center rounded-lg mb-3 py-2.5 text-gray-400 hover:text-amber-400 hover:bg-white/5 transition-all duration-200 border border-amber-500/20 hover:border-amber-500/40 ${
+                            sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
+                        }`}
+                    >
+                        {sidebarCollapsed ? <PanelLeft className="w-5 h-5 shrink-0" /> : <PanelLeftClose className="w-5 h-5 shrink-0" />}
+                        {!sidebarCollapsed && <span className="font-medium text-sm truncate">Collapse sidebars</span>}
+                    </button>
+                    <nav className="space-y-2 flex-1">
                         {filteredMenuItems.map(item => {
                             const Icon = item.icon;
                             const isActive = activeTab === item.id;
@@ -597,21 +628,23 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                         e.preventDefault();
                                         e.stopPropagation();
                                         setActiveTab(item.id);
-                                        // Update URL to reflect the active tab
                                         const params = new URLSearchParams(searchParams?.toString() || '');
                                         params.set('tab', item.id);
                                         router.push(`${pathname}?${params.toString()}`, { scroll: false });
                                     }}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                                    title={sidebarCollapsed ? item.label : undefined}
+                                    className={`w-full flex items-center rounded-lg transition-all duration-200 ease-out active:scale-[0.99] ${
+                                        sidebarCollapsed ? 'justify-center p-2.5' : 'gap-3 px-4 py-3'
+                                    } ${
                                         isActive
                                             ? 'bg-gradient-to-r from-amber-500/20 to-red-600/20 text-amber-400 border border-amber-500/50'
                                             : 'text-gray-400 hover:text-white hover:bg-white/5'
                                     }`}
                                 >
-                                    <Icon className="w-5 h-5" />
-                                    <span className="font-medium">
-                                        {item.label}
-                                    </span>
+                                    <Icon className="w-5 h-5 shrink-0" />
+                                    {!sidebarCollapsed && (
+                                        <span className="font-medium truncate">{item.label}</span>
+                                    )}
                                 </button>
                             );
                         })}
@@ -619,7 +652,11 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                 </aside>
 
                 {/* Main content */}
-                <main className="flex-1 p-8">
+                <main className={activeTab === 'dashboard' ? 'flex-1 flex flex-col min-h-0 overflow-hidden' : 'flex-1 p-8'}>
+                        {/* Dashboard Tab - CICOP: full space, no extra wrapper or heading */}
+                        {activeTab === 'dashboard' ? (
+                            <CICOPDashboardContent embedded sidebarCollapsed={sidebarCollapsed} />
+                        ) : (
                     <div className="max-w-6xl">
                         <div className="mb-8">
                             <h2 className="text-3xl font-bold text-white mb-2">
@@ -1271,7 +1308,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                                                                                 u.name
                                                                             )
                                                                         }
-                                                                        className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                                                        className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200 active:scale-95"
                                                                         title="Delete User"
                                                                     >
                                                                         <Trash2 className="w-4 h-4" />
@@ -1374,6 +1411,7 @@ export const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                             </div>
                         )}
                     </div>
+                        )}
                 </main>
             </div>
 

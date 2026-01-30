@@ -1,15 +1,19 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
-export default function AssessmentDetailPage({
+function AssessmentDetailContent({
     params,
 }: {
     params: Promise<{ id: string }>;
 }) {
     const { id: routeId } = use(params);
+    const searchParams = useSearchParams();
+    const fromAdmin = searchParams?.get('from') === 'admin';
+    const backHref = fromAdmin ? '/pages/admin?tab=dashboard' : '/pages/cicop';
     const [assessment, setAssessment] = useState<Record<
         string,
         unknown
@@ -44,18 +48,18 @@ export default function AssessmentDetailPage({
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-neutral-950 text-white font-sans antialiased flex items-center justify-center">
-                <p className="text-neutral-500 text-sm">Loading assessment...</p>
+            <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white font-sans antialiased flex items-center justify-center">
+                <p className="text-gray-500 text-sm">Loading assessment...</p>
             </div>
         );
     }
 
     if (error || !assessment) {
         return (
-            <div className="min-h-screen bg-neutral-950 text-white font-sans antialiased flex flex-col items-center justify-center gap-4">
+            <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white font-sans antialiased flex flex-col items-center justify-center gap-4">
                 <p className="text-red-400 text-sm">{error || 'Not found'}</p>
-                <Link href="/pages/cicop" className="inline-flex items-center gap-2 text-neutral-400 hover:text-white text-sm transition-colors">
-                    <ArrowLeft size={18} /> Back to CICOP
+                <Link href={backHref} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-400 hover:text-white text-sm transition-colors">
+                    <ArrowLeft size={18} /> Back
                 </Link>
             </div>
         );
@@ -98,27 +102,41 @@ export default function AssessmentDetailPage({
     ].filter(r => r.value != null && r.value !== '');
 
     return (
-        <div className="min-h-screen bg-neutral-950 text-white font-sans antialiased p-6">
+        <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white font-sans antialiased p-6">
             <div className="max-w-2xl mx-auto">
-                <Link href="/pages/cicop" className="inline-flex items-center gap-2 text-neutral-400 hover:text-white text-sm mb-6 transition-colors">
-                    <ArrowLeft size={18} /> Back to CICOP
+                <Link href={backHref} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-400 hover:text-white text-sm mb-6 transition-colors w-fit">
+                    <ArrowLeft size={18} /> Back
                 </Link>
                 <h1 className="text-xl font-semibold text-white mb-1 tabular-nums">
                     Assessment #{String(assessment.assessment_no)}
                 </h1>
-                <p className="text-neutral-500 text-sm mb-8">
+                <p className="text-gray-500 text-sm mb-8">
                     {assessment.claim_number != null ? `Claim ${String(assessment.claim_number)}` : ''}
                     {assessment.status != null ? ` · ${String(assessment.status)}` : ''}
                 </p>
-                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 space-y-0">
+                <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 p-6 space-y-0">
                     {rows.map(({ label, value }) => (
-                        <div key={label} className="flex justify-between items-baseline gap-4 py-3 border-b border-neutral-800 last:border-0 last:pb-0">
-                            <span className="text-neutral-500 text-sm">{label}</span>
+                        <div key={label} className="flex justify-between items-baseline gap-4 py-3 border-b border-gray-700 last:border-0 last:pb-0">
+                            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest">{label}</span>
                             <span className="text-white font-medium text-right tabular-nums">{String(value)}</span>
                         </div>
                     ))}
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function AssessmentDetailPage(
+    props: { params: Promise<{ id: string }> }
+) {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white flex items-center justify-center p-6">
+                <p className="text-gray-500 text-sm">Loading assessment...</p>
+            </div>
+        }>
+            <AssessmentDetailContent params={props.params} />
+        </Suspense>
     );
 }

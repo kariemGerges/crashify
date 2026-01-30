@@ -21,11 +21,11 @@ export async function GET(request: NextRequest) {
 
     const results = await cicopEmailIntegration.pollEmails();
 
-    // Count results
     const processed = results.filter(r => r.processed).length;
     const slaStarted = results.filter(r => r.sla_started).length;
     const complaintsDetected = results.filter(r => r.complaint_detected).length;
     const autoResponsesSent = results.filter(r => r.auto_response_sent).length;
+    const skippedUnauthorized = results.filter(r => r.skipped_unauthorized).length;
     const errors = results.filter(r => r.error).length;
 
     // Log daily stats
@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
       sla_started: slaStarted,
       complaints_detected: complaintsDetected,
       auto_responses_sent: autoResponsesSent,
+      skipped_unauthorized: skippedUnauthorized,
       errors,
       success: true
     };

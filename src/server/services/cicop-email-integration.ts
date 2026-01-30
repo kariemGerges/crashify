@@ -1,16 +1,20 @@
 /**
  * CICOP Email Integration Service
- * 
+ *
  * Handles:
  * - Microsoft 365 email polling
+ * - Authorized senders filter (only process configured senders/domains)
  * - Email analysis (AI)
- * - SLA tracking
+ * - Business-hours SLA + per-insurer commitment text
  * - Complaint detection
+ * - Compliance-safe name extraction for greeting
  * - Auto-response generation
  */
 
 import { createServerClient } from '@/server/lib/supabase/client';
 import { cicopAIService } from './cicop-ai-service';
+import { cicopSlaService } from './cicop-sla-service';
+import { getGreetingRecipient } from './name-extractor';
 import { getMicrosoftGraphToken } from './microsoft-graph-auth';
 
 interface ProcessedEmailResult {
@@ -19,7 +23,25 @@ interface ProcessedEmailResult {
   sla_started: boolean;
   complaint_detected: boolean;
   auto_response_sent: boolean;
+  skipped_unauthorized?: boolean;
   error?: string;
+}
+
+/** Check if sender is in allowed list (exact email or domain match). Empty list = allow all. */
+function isAuthorizedSender(sender: string, authorizedSenders: string[]): boolean {
+  if (!authorizedSenders || authorizedSenders.length === 0) return true;
+  const senderLower = sender.toLowerCase();
+  for (const allowed of authorizedSenders) {
+    const a = allowed.toLowerCase().trim();
+    if (a === senderLower) return true;
+    if (a.includes('@')) {
+      const domain = a.split('@')[1];
+      if (senderLower.endsWith('@' + domain)) return true;
+    } else {
+      if (senderLower.endsWith('@' + a)) return true;
+    }
+  }
+  return false;
 }
 
 export class CICOPEmailIntegration {
@@ -58,9 +80,18 @@ export class CICOPEmailIntegration {
 
       console.log(`📧 Fetched ${emails.length} recent emails`);
 
-      // Process each email
+      const supabase = createServerClient();
+      const { data: authData } = await supabase
+        .from('cicop_config')
+        .select('value')
+        .eq('key', 'authorized_senders')
+        .single() as { data: { value?: unknown } | null };
+      const authorizedSenders: string[] = Array.isArray(authData?.value)
+        ? (authData.value as string[])
+        : [];
+
       for (const email of emails) {
-        const result = await this.processEmail(email);
+        const result = await this.processEmail(email, authorizedSenders);
         results.push(result);
       }
 
@@ -75,7 +106,10 @@ export class CICOPEmailIntegration {
   /**
    * Process a single email
    */
-  private async processEmail(emailData: any): Promise<ProcessedEmailResult> {
+  private async processEmail(
+    emailData: any,
+    authorizedSenders: string[]
+  ): Promise<ProcessedEmailResult> {
     const emailId = emailData.id;
     const result: ProcessedEmailResult = {
       email_id: emailId,
@@ -88,7 +122,17 @@ export class CICOPEmailIntegration {
     try {
       const supabase = createServerClient();
 
-      // Check if already processed
+      const sender = emailData.from?.emailAddress?.address || 'unknown';
+      const displayName = emailData.from?.emailAddress?.name || null;
+      const subject = emailData.subject || '(no subject)';
+      const content = emailData.bodyPreview || emailData.body?.content || '';
+
+      if (!isAuthorizedSender(sender, authorizedSenders)) {
+        console.log(`⏭️  Skipping email from unauthorized sender: ${sender}`);
+        result.skipped_unauthorized = true;
+        return result;
+      }
+
       const { data: existing } = await supabase
         .from('cicop_processed_emails')
         .select('id')
@@ -100,11 +144,6 @@ export class CICOPEmailIntegration {
         result.processed = true;
         return result;
       }
-
-      // Extract email details
-      const sender = emailData.from?.emailAddress?.address || 'unknown';
-      const subject = emailData.subject || '(no subject)';
-      const content = emailData.bodyPreview || emailData.body?.content || '';
 
       // AI Analysis
       const analysis = await cicopAIService.analyzeEmail({
@@ -133,9 +172,14 @@ export class CICOPEmailIntegration {
         is_follow_up: false
       });
 
-      // Start SLA tracking if needed
+      let commitmentText: string | undefined;
       if (analysis.claim_reference && !isComplaint) {
-        await this.startSLATracking(analysis.claim_reference, sender, analysis.urgency);
+        const slaResult = await cicopSlaService.startSlaTracking(
+          analysis.claim_reference,
+          sender,
+          analysis.urgency
+        );
+        commitmentText = slaResult.commitment_text;
         result.sla_started = true;
       }
 
@@ -154,13 +198,13 @@ export class CICOPEmailIntegration {
         console.log(`⚠️  Complaint detected: ${complaintDetection.severity} severity`);
       }
 
-      // Send auto-response if enabled and not a complaint
       if (!isComplaint) {
         const autoResponseSent = await this.sendAutoResponse(
           emailId,
           sender,
           subject,
-          analysis
+          analysis,
+          { displayName, content, commitmentText }
         );
         result.auto_response_sent = autoResponseSent;
       }
@@ -176,61 +220,18 @@ export class CICOPEmailIntegration {
   }
 
   /**
-   * Start SLA tracking for a claim
-   */
-  private async startSLATracking(
-    claimReference: string,
-    sender: string,
-    urgency: string
-  ): Promise<void> {
-    try {
-      const supabase = createServerClient();
-
-      // Check if SLA already exists
-      const { data: existing } = await supabase
-        .from('cicop_sla_tracking')
-        .select('id')
-        .eq('claim_reference', claimReference)
-        .single();
-
-      if (existing) {
-        console.log(`⏭️  SLA already tracking for ${claimReference}`);
-        return;
-      }
-
-      // Get insurer domain
-      const insurerDomain = sender.includes('@') ? sender.split('@')[1] : 'unknown';
-
-      // Default SLA: 48 hours
-      const slaHours = urgency === 'urgent' ? 24 : 48;
-      const slaDeadline = new Date(Date.now() + slaHours * 60 * 60 * 1000);
-
-      // @ts-expect-error - table may be missing from generated types
-      await supabase.from('cicop_sla_tracking').insert({
-        claim_reference: claimReference,
-        sender,
-        insurer_domain: insurerDomain,
-        urgency,
-        sla_deadline: slaDeadline.toISOString(),
-        sla_hours: slaHours,
-        status: 'in_progress'
-      });
-
-      console.log(`⏰ SLA started for ${claimReference}: ${slaHours}h deadline`);
-
-    } catch (error) {
-      console.error('Error starting SLA tracking:', error);
-    }
-  }
-
-  /**
-   * Send auto-response
+   * Send auto-response (compliance-safe greeting + per-insurer commitment text)
    */
   private async sendAutoResponse(
     emailId: string,
     recipient: string,
     originalSubject: string,
-    analysis: any
+    analysis: any,
+    options: {
+      displayName?: string | null;
+      content?: string;
+      commitmentText?: string;
+    } = {}
   ): Promise<boolean> {
     try {
       const supabase = createServerClient();
@@ -261,14 +262,23 @@ export class CICOPEmailIntegration {
         return false;
       }
 
-      // Render template with variables
-      const variables = {
+      const customerName = getGreetingRecipient(
+        recipient,
+        options.displayName ?? null,
+        options.content ?? null
+      );
+      const commitmentText =
+        options.commitmentText ??
+        'Your assessment will be completed within our standard 48-hour service level from instruction receipt.';
+
+      const variables: Record<string, string> = {
         claim_reference: analysis.claim_reference || 'TBC',
+        customer_name: customerName,
         vehicle_details: analysis.vehicle_rego ? `Rego: ${analysis.vehicle_rego}` : 'Details to be confirmed',
         date_received: new Date().toLocaleDateString(),
         assessment_type: 'Desktop/On-site',
         status: 'Received',
-        greeting: 'Dear Customer'
+        commitment_text: commitmentText
       };
 
       let subject = template.subject_template;
@@ -363,14 +373,20 @@ export class CICOPEmailIntegration {
         throw new Error('Template not found');
       }
 
-      // Render with variables
-      const variables = {
+      const customerName = getGreetingRecipient(
+        emailData.sender,
+        (emailData as { displayName?: string }).displayName ?? null,
+        emailData.content ?? null
+      );
+      const variables: Record<string, string> = {
         claim_reference: analysis.claim_reference || 'TBC',
+        customer_name: customerName,
         vehicle_details: analysis.vehicle_rego ? `Rego: ${analysis.vehicle_rego}` : 'Details to be confirmed',
         date_received: new Date().toLocaleDateString(),
         assessment_type: 'Desktop/On-site',
         status: 'Received',
-        greeting: 'Dear Customer'
+        commitment_text:
+          'Your assessment will be completed within our standard 48-hour service level from instruction receipt.'
       };
 
       let subject = template.subject_template;
@@ -382,7 +398,6 @@ export class CICOPEmailIntegration {
       });
 
       return { subject, body };
-
     } catch (error) {
       console.error('Error generating draft:', error);
       throw error;

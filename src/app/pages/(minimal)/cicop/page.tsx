@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, RefreshCw, Download, Plus } from 'lucide-react';
+import { Search, RefreshCw, Download, Plus, LayoutDashboard, PieChart, Car, FileText, DollarSign, ShieldAlert, Building2, Brain, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 
 // Types
@@ -80,13 +80,31 @@ function Skeleton({
         style === 'bar' ? 'h-6' : style === 'short' ? 'h-4' : 'h-8';
     return (
         <div
-            className={`animate-pulse rounded bg-slate-600/50 ${heightClass} ${className}`}
+            className={`animate-pulse rounded bg-gray-600/50 ${heightClass} ${className}`}
             aria-hidden
         />
     );
 }
 
-export default function CICOPDashboard() {
+const CICOP_NAV_ITEMS: { id: string; label: string; icon: React.ComponentType<{ className?: string }>; section: string }[] = [
+    { id: 'executive', label: 'Executive Command Centre', icon: LayoutDashboard, section: 'Executive' },
+    { id: 'savings', label: 'Savings Attribution', icon: PieChart, section: 'Executive' },
+    { id: 'vehicle-intelligence', label: 'Vehicle Intelligence', icon: Car, section: 'Executive' },
+    { id: 'assessment', label: 'Assessment View', icon: FileText, section: 'Workspaces' },
+    { id: 'cost-control', label: 'Cost Control', icon: DollarSign, section: 'Workspaces' },
+    { id: 'fraud-risk', label: 'Fraud & Risk', icon: ShieldAlert, section: 'Workspaces' },
+    { id: 'repairer-network', label: 'Repairer Network', icon: Building2, section: 'Workspaces' },
+    { id: 'ai-health', label: 'AI Health Dashboard', icon: Brain, section: 'AI' },
+    { id: 'triage', label: 'Triage Engine', icon: GitBranch, section: 'AI' },
+];
+
+export function CICOPDashboardContent({
+    embedded = false,
+    sidebarCollapsed = false,
+}: {
+    embedded?: boolean;
+    sidebarCollapsed?: boolean;
+}) {
     const [activeTab, setActiveTab] = useState('executive');
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<Assessment[]>([]);
@@ -97,7 +115,7 @@ export default function CICOPDashboard() {
 
     // Filters
     const [filterInsurer, setFilterInsurer] = useState('all');
-    const [filterDateRange, setFilterDateRange] = useState('last-30');
+    const [filterDateRange, setFilterDateRange] = useState('all');
     const [filterRepairer, setFilterRepairer] = useState('all');
     const [filterMake, setFilterMake] = useState('all');
     const [filterClaimType, setFilterClaimType] = useState('all');
@@ -255,172 +273,11 @@ export default function CICOPDashboard() {
         };
     }, []);
 
-    return (
-        <div className="min-h-screen bg-neutral-950 text-white font-sans antialiased">
-            {/* Top bar */}
-            <header className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-6 bg-neutral-900/95 backdrop-blur-md border-b border-neutral-800/80">
-                <Link
-                    href="/pages/cicop"
-                    className="flex items-center shrink-0 mr-8"
-                >
-                    <span className="text-lg font-semibold tracking-tight text-white">
-                        CRASHIFY
-                    </span>
-                    <span className="text-lg font-semibold tracking-tight text-red-500 ml-1">
-                        CICOP
-                    </span>
-                </Link>
-
-                <div
-                    className="flex-1 max-w-xl relative"
-                    ref={searchContainerRef}
-                >
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-neutral-500" />
-                    <input
-                        type="text"
-                        placeholder="Search claim number, rego, VIN, customer..."
-                        className="w-full h-10 pl-11 pr-4 rounded-xl bg-neutral-800/80 border border-neutral-700/80 text-white text-sm placeholder-neutral-500 focus:outline-none focus:border-neutral-600 focus:ring-2 focus:ring-neutral-700/50"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        onFocus={() =>
-                            searchTerm.length >= 2 && setShowSearchResults(true)
-                        }
-                    />
-                    {showSearchResults && (
-                        <div className="absolute top-full mt-2 left-0 right-0 z-50 rounded-xl border border-neutral-700/80 bg-neutral-900 shadow-2xl shadow-black/40 max-h-[28rem] overflow-y-auto">
-                            {isSearching ? (
-                                <div className="p-5 flex items-center justify-center gap-2 text-neutral-400 text-sm">
-                                    <RefreshCw className="size-4 animate-spin" />
-                                    Searching...
-                                </div>
-                            ) : searchError ? (
-                                <div className="p-5 text-center text-red-400 text-sm">
-                                    {searchError}
-                                </div>
-                            ) : searchResults.length > 0 ? (
-                                searchResults.map(result => (
-                                    <Link
-                                        key={result.assessment_no}
-                                        href={`/pages/cicop/assessment/${result.assessment_no}`}
-                                        className="block px-4 py-3 border-b border-neutral-800/80 last:border-0 hover:bg-neutral-800/60 transition-colors"
-                                    >
-                                        <div className="flex justify-between items-start gap-2 mb-1.5">
-                                            <span className="font-medium text-sm text-white tabular-nums">
-                                                #{result.assessment_no} ·{' '}
-                                                {result.claim_number || 'N/A'}
-                                            </span>
-                                            <span className="shrink-0 px-2 py-0.5 rounded-md bg-red-500/15 text-red-400 text-[11px] font-medium">
-                                                {result.status}
-                                            </span>
-                                        </div>
-                                        <div className="flex gap-4 text-xs text-neutral-400">
-                                            <span>
-                                                {result.make} {result.model}
-                                            </span>
-                                            <span>{result.rego || 'N/A'}</span>
-                                            <span>
-                                                {result.insurer || 'N/A'}
-                                            </span>
-                                        </div>
-                                    </Link>
-                                ))
-                            ) : (
-                                <div className="p-5 text-center text-neutral-400 text-sm">
-                                    No results for &quot;{searchTerm}&quot;
-                                    <p className="text-neutral-500 text-xs mt-1">
-                                        Try claim number, rego, VIN, or customer
-                                        name
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                <button
-                    onClick={loadDashboardData}
-                    className="shrink-0 ml-4 h-10 w-10 rounded-xl bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors"
-                    title="Refresh"
-                >
-                    <RefreshCw
-                        size={18}
-                        className={loading ? 'animate-spin' : ''}
-                    />
-                </button>
-            </header>
-
-            <div className="flex pt-16">
-                <aside className="fixed left-0 top-16 w-56 h-[calc(100vh-4rem)] border-r border-neutral-800/80 bg-neutral-900/50 overflow-y-auto">
-                    <nav className="p-3 space-y-6">
-                        <div>
-                            <p className="px-3 mb-1.5 text-[11px] font-semibold text-neutral-500 uppercase tracking-widest">
-                                Executive
-                            </p>
-                            <NavItem
-                                label="Executive Command Centre"
-                                active={activeTab === 'executive'}
-                                onClick={() => setActiveTab('executive')}
-                            />
-                            <NavItem
-                                label="Savings Attribution"
-                                active={activeTab === 'savings'}
-                                onClick={() => setActiveTab('savings')}
-                            />
-                            <NavItem
-                                label="Vehicle Intelligence"
-                                active={activeTab === 'vehicle-intelligence'}
-                                onClick={() =>
-                                    setActiveTab('vehicle-intelligence')
-                                }
-                            />
-                        </div>
-                        <div>
-                            <p className="px-3 mb-1.5 text-[11px] font-semibold text-neutral-500 uppercase tracking-widest">
-                                Workspaces
-                            </p>
-                            <NavItem
-                                label="Assessment View"
-                                active={activeTab === 'assessment'}
-                                onClick={() => setActiveTab('assessment')}
-                            />
-                            <NavItem
-                                label="Cost Control"
-                                active={activeTab === 'cost-control'}
-                                onClick={() => setActiveTab('cost-control')}
-                            />
-                            <NavItem
-                                label="Fraud & Risk"
-                                active={activeTab === 'fraud-risk'}
-                                onClick={() => setActiveTab('fraud-risk')}
-                            />
-                            <NavItem
-                                label="Repairer Network"
-                                active={activeTab === 'repairer-network'}
-                                onClick={() => setActiveTab('repairer-network')}
-                            />
-                        </div>
-                        <div>
-                            <p className="px-3 mb-1.5 text-[11px] font-semibold text-neutral-500 uppercase tracking-widest">
-                                AI
-                            </p>
-                            <NavItem
-                                label="AI Health Dashboard"
-                                active={activeTab === 'ai-health'}
-                                onClick={() => setActiveTab('ai-health')}
-                            />
-                            <NavItem
-                                label="Triage Engine"
-                                active={activeTab === 'triage'}
-                                onClick={() => setActiveTab('triage')}
-                            />
-                        </div>
-                    </nav>
-                </aside>
-
-                <main className="ml-56 flex-1 min-h-[calc(100vh-4rem)] p-6">
+    const mainContentTop = (
+        <>
                     {/* Filters */}
                     <div className="flex flex-wrap items-center gap-3 mb-6">
-                        <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-widest mr-1">
+                        <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest mr-1">
                             Filters
                         </span>
                         <FilterSelect
@@ -434,6 +291,7 @@ export default function CICOPDashboard() {
                             value={filterDateRange}
                             onChange={setFilterDateRange}
                             options={[
+                                'all',
                                 'last-7',
                                 'last-30',
                                 'last-90',
@@ -459,7 +317,7 @@ export default function CICOPDashboard() {
                             options={['all', ...claimTypes]}
                         />
                         {(filterInsurer !== 'all' ||
-                            filterDateRange !== 'last-30' ||
+                            filterDateRange !== 'all' ||
                             filterRepairer !== 'all' ||
                             filterMake !== 'all' ||
                             filterClaimType !== 'all') && (
@@ -467,12 +325,12 @@ export default function CICOPDashboard() {
                                 type="button"
                                 onClick={() => {
                                     setFilterInsurer('all');
-                                    setFilterDateRange('last-30');
+                                    setFilterDateRange('all');
                                     setFilterRepairer('all');
                                     setFilterMake('all');
                                     setFilterClaimType('all');
                                 }}
-                                className="px-3 py-1.5 text-xs font-medium text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors"
+                                className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 active:scale-95"
                             >
                                 Clear
                             </button>
@@ -576,32 +434,35 @@ export default function CICOPDashboard() {
 
                     <div className="flex flex-wrap gap-3 mb-8">
                         <Link
-                            href="/pages/cicop/assessment/new"
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium text-sm transition-colors"
+                            href={`/pages/cicop/assessment/new${embedded ? '?from=admin' : ''}`}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-600 hover:to-red-700 text-white font-medium text-sm transition-all duration-200 active:scale-[0.98]"
                         >
                             Add Assessment
                         </Link>
                         <Link
-                            href="/pages/cicop/monitor"
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white font-medium text-sm transition-colors"
+                            href={`/pages/cicop/monitor${embedded ? '?from=admin' : ''}`}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-medium text-sm transition-all duration-200 active:scale-[0.98]"
                         >
                             Monitor
                         </Link>
                         <Link
-                            href="/pages/cicop/browse"
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white font-medium text-sm transition-colors"
+                            href={`/pages/cicop/browse${embedded ? '?from=admin' : ''}`}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-medium text-sm transition-all duration-200 active:scale-[0.98]"
                         >
                             Browse ({kpiData?.total ?? '—'})
                         </Link>
                         <Link
-                            href="/pages/cicop/email-monitor"
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white font-medium text-sm transition-colors"
+                            href={`/pages/cicop/email-monitor${embedded ? '?from=admin' : ''}`}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-medium text-sm transition-all duration-200 active:scale-[0.98]"
                         >
                             Email
                         </Link>
                     </div>
+        </>
+    );
 
-                    {/* Workspace Content */}
+    const workspaceContent = (
+        <>
                     {activeTab === 'executive' && (
                         <ExecutiveWorkspace
                             slaStatus={slaStatus}
@@ -633,6 +494,216 @@ export default function CICOPDashboard() {
                     {activeTab === 'triage' && (
                         <PlaceholderWorkspace title="Triage Engine" />
                     )}
+        </>
+    );
+
+    const sidebarContent = (
+        <aside className={`${sidebarCollapsed ? 'w-[4.5rem]' : 'w-56'} shrink-0 border-r border-amber-500/20 bg-gray-900/30 overflow-y-auto overflow-x-hidden transition-[width] duration-200 ease-out`}>
+            <nav className="p-3 space-y-1">
+                {(() => {
+                    let lastSection = '';
+                    return CICOP_NAV_ITEMS.map((item) => {
+                        const showSection = !sidebarCollapsed && item.section !== lastSection;
+                        if (showSection) lastSection = item.section;
+                        const Icon = item.icon;
+                        return (
+                            <div key={item.id}>
+                                {showSection && (
+                                    <p className="px-3 mb-1.5 mt-4 first:mt-0 text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
+                                        {item.section}
+                                    </p>
+                                )}
+                                <NavItem
+                                    label={item.label}
+                                    icon={<Icon className="w-5 h-5 shrink-0" />}
+                                    active={activeTab === item.id}
+                                    collapsed={sidebarCollapsed}
+                                    onClick={() => setActiveTab(item.id)}
+                                />
+                            </div>
+                        );
+                    });
+                })()}
+            </nav>
+        </aside>
+    );
+
+    if (embedded) {
+        return (
+            <div className="flex-1 flex min-h-0 w-full min-w-0 text-white font-sans antialiased overflow-hidden">
+                {sidebarContent}
+                <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden p-4 md:p-6">
+                    <div className="w-full min-w-0 flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div className="shrink-0 w-full animate-fade-in">{mainContentTop}</div>
+                        <div key={activeTab} className="flex-1 min-h-0 min-w-0 overflow-auto w-full animate-fade-in">
+                            {workspaceContent}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white font-sans antialiased">
+            <header className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-6 bg-gray-900/95 backdrop-blur-md border-b border-amber-500/20">
+                <Link
+                    href="/pages/cicop"
+                    className="flex items-center shrink-0 mr-8"
+                >
+                    <span className="text-lg font-semibold tracking-tight text-white">
+                        CRASHIFY
+                    </span>
+                    <span className="text-lg font-semibold tracking-tight text-amber-400 ml-1">
+                        CICOP
+                    </span>
+                </Link>
+                <div
+                    className="flex-1 max-w-xl relative"
+                    ref={searchContainerRef}
+                >
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+                    <input
+                        type="text"
+                        placeholder="Search claim number, rego, VIN, customer..."
+                        className="w-full h-10 pl-11 pr-4 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-amber-500 transition-colors"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        onFocus={() =>
+                            searchTerm.length >= 2 && setShowSearchResults(true)
+                        }
+                    />
+                    {showSearchResults && (
+                        <div className="absolute top-full mt-2 left-0 right-0 z-50 rounded-lg border border-gray-700 bg-gray-900 shadow-2xl shadow-black/40 max-h-[28rem] overflow-y-auto">
+                            {isSearching ? (
+                                <div className="p-5 flex items-center justify-center gap-2 text-gray-400 text-sm">
+                                    <RefreshCw className="size-4 animate-spin" />
+                                    Searching...
+                                </div>
+                            ) : searchError ? (
+                                <div className="p-5 text-center text-amber-400 text-sm">
+                                    {searchError}
+                                </div>
+                            ) : searchResults.length > 0 ? (
+                                searchResults.map(result => (
+                                    <Link
+                                        key={result.assessment_no}
+                                        href={`/pages/cicop/assessment/${result.assessment_no}`}
+                                        className="block px-4 py-3 border-b border-gray-800 last:border-0 hover:bg-white/5 transition-colors"
+                                    >
+                                        <div className="flex justify-between items-start gap-2 mb-1.5">
+                                            <span className="font-medium text-sm text-white tabular-nums">
+                                                #{result.assessment_no} ·{' '}
+                                                {result.claim_number || 'N/A'}
+                                            </span>
+                                            <span className="shrink-0 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 text-[11px] font-medium">
+                                                {result.status}
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-4 text-xs text-gray-400">
+                                            <span>
+                                                {result.make} {result.model}
+                                            </span>
+                                            <span>{result.rego || 'N/A'}</span>
+                                            <span>
+                                                {result.insurer || 'N/A'}
+                                            </span>
+                                        </div>
+                                    </Link>
+                                ))
+                            ) : (
+                                <div className="p-5 text-center text-gray-400 text-sm">
+                                    No results for &quot;{searchTerm}&quot;
+                                    <p className="text-gray-500 text-xs mt-1">
+                                        Try claim number, rego, VIN, or customer
+                                        name
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+                <button
+                    onClick={loadDashboardData}
+                    className="shrink-0 ml-4 h-10 w-10 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 transition-all duration-200 active:scale-95"
+                    title="Refresh"
+                >
+                    <RefreshCw
+                        size={18}
+                        className={loading ? 'animate-spin' : ''}
+                    />
+                </button>
+            </header>
+            <div className="flex pt-16">
+                <aside className="fixed left-0 top-16 w-56 h-[calc(100vh-4rem)] border-r border-amber-500/20 bg-gray-900/30 overflow-y-auto">
+                    <nav className="p-3 space-y-6">
+                        <div>
+                            <p className="px-3 mb-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
+                                Executive
+                            </p>
+                            <NavItem
+                                label="Executive Command Centre"
+                                active={activeTab === 'executive'}
+                                onClick={() => setActiveTab('executive')}
+                            />
+                            <NavItem
+                                label="Savings Attribution"
+                                active={activeTab === 'savings'}
+                                onClick={() => setActiveTab('savings')}
+                            />
+                            <NavItem
+                                label="Vehicle Intelligence"
+                                active={activeTab === 'vehicle-intelligence'}
+                                onClick={() =>
+                                    setActiveTab('vehicle-intelligence')
+                                }
+                            />
+                        </div>
+                        <div>
+                            <p className="px-3 mb-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
+                                Workspaces
+                            </p>
+                            <NavItem
+                                label="Assessment View"
+                                active={activeTab === 'assessment'}
+                                onClick={() => setActiveTab('assessment')}
+                            />
+                            <NavItem
+                                label="Cost Control"
+                                active={activeTab === 'cost-control'}
+                                onClick={() => setActiveTab('cost-control')}
+                            />
+                            <NavItem
+                                label="Fraud & Risk"
+                                active={activeTab === 'fraud-risk'}
+                                onClick={() => setActiveTab('fraud-risk')}
+                            />
+                            <NavItem
+                                label="Repairer Network"
+                                active={activeTab === 'repairer-network'}
+                                onClick={() => setActiveTab('repairer-network')}
+                            />
+                        </div>
+                        <div>
+                            <p className="px-3 mb-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
+                                AI
+                            </p>
+                            <NavItem
+                                label="AI Health Dashboard"
+                                active={activeTab === 'ai-health'}
+                                onClick={() => setActiveTab('ai-health')}
+                            />
+                            <NavItem
+                                label="Triage Engine"
+                                active={activeTab === 'triage'}
+                                onClick={() => setActiveTab('triage')}
+                            />
+                        </div>
+                    </nav>
+                </aside>
+                <main className="ml-56 flex-1 min-h-[calc(100vh-4rem)] p-6">
+                    {mainContentTop}
+                    {workspaceContent}
                 </main>
             </div>
         </div>
@@ -640,18 +711,22 @@ export default function CICOPDashboard() {
 }
 
 // Components
-function NavItem({ label, active, onClick }: any) {
+function NavItem({ label, icon, active, collapsed, onClick }: { label: string; icon?: React.ReactNode; active: boolean; collapsed?: boolean; onClick: () => void }) {
     return (
         <button
             type="button"
             onClick={onClick}
-            className={`w-full text-left px-3 py-2 rounded-r-lg text-sm font-medium transition-colors ${
+            title={collapsed ? label : undefined}
+            className={`w-full flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out active:scale-[0.99] ${
+                collapsed ? 'justify-center p-2.5' : 'text-left gap-3 px-3 py-2'
+            } ${
                 active
-                    ? 'bg-neutral-800 text-white border-l-2 border-l-red-500 -ml-px pl-[11px]'
-                    : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60 border-l-2 border-l-transparent'
+                    ? 'bg-gradient-to-r from-amber-500/20 to-red-600/20 text-amber-400 border border-amber-500/50'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
         >
-            {label}
+            {icon}
+            {!collapsed && <span className="truncate">{label}</span>}
         </button>
     );
 }
@@ -659,16 +734,16 @@ function NavItem({ label, active, onClick }: any) {
 function FilterSelect({ label, value, onChange, options }: any) {
     return (
         <div className="flex items-center gap-2">
-            <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-widest shrink-0">
+            <label className="text-[11px] font-medium text-gray-500 uppercase tracking-widest shrink-0">
                 {label}
             </label>
             <select
                 value={value}
                 onChange={e => onChange(e.target.value)}
-                className="h-9 px-3 rounded-lg bg-neutral-800/80 border border-neutral-700/80 text-white text-sm cursor-pointer focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600"
+                className="h-9 px-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm cursor-pointer focus:outline-none focus:border-amber-500 transition-all duration-200"
             >
                 {options.map((opt: string) => (
-                    <option key={opt} value={opt} className="bg-neutral-800">
+                    <option key={opt} value={opt} className="bg-gray-800">
                         {opt === 'all'
                             ? 'All'
                             : opt
@@ -686,19 +761,19 @@ function FilterSelect({ label, value, onChange, options }: any) {
 function KPITile({ label, value, trend, loading, color = 'slate' }: any) {
     return (
         <div
-            className={`rounded-2xl border p-4 transition-colors ${
+            className={`rounded-xl border p-4 transition-all duration-200 ease-out hover:border-amber-500/40 hover:-translate-y-0.5 ${
                 color === 'red'
-                    ? 'border-red-500/30 bg-red-500/5'
-                    : 'border-neutral-800 bg-neutral-900/60'
+                    ? 'border-red-500/30 bg-red-500/5 hover:border-red-500/50'
+                    : 'border-amber-500/20 bg-gray-900/50'
             }`}
         >
-            <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-widest mb-1.5">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-1.5">
                 {label}
             </p>
-            <div className="text-2xl font-semibold tabular-nums min-h-[2rem] flex items-center">
+            <div className="text-2xl font-semibold tabular-nums min-h-[2rem] flex items-center text-white">
                 {loading ? <Skeleton className="w-14" style="bar" /> : value}
             </div>
-            <p className="text-[11px] text-neutral-500 min-h-[1rem] mt-0.5">
+            <p className="text-[11px] text-gray-500 min-h-[1rem] mt-0.5">
                 {loading ? <Skeleton className="w-20" style="short" /> : trend}
             </p>
         </div>
@@ -843,7 +918,7 @@ function ExecutiveWorkspace({
             </div>
 
             <div className="pt-4">
-                <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-4">
+                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">
                     Advanced Analytics
                 </h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -862,7 +937,7 @@ function ExecutiveWorkspace({
                         content={
                             <div className="space-y-3 mt-3">
                                 <div>
-                                    <div className="text-xs text-slate-400">
+                                    <div className="text-xs text-gray-400">
                                         Total Savings This Month
                                     </div>
                                     <div className="text-2xl font-bold min-h-[2rem] flex items-center">
@@ -879,7 +954,7 @@ function ExecutiveWorkspace({
                                 </div>
                                 <div className="flex gap-4">
                                     <div>
-                                        <div className="text-xs text-slate-400">
+                                        <div className="text-xs text-gray-400">
                                             Quote Reduction
                                         </div>
                                         <div className="text-xl font-bold min-h-[1.5rem] flex items-center">
@@ -896,7 +971,7 @@ function ExecutiveWorkspace({
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="text-xs text-slate-400">
+                                        <div className="text-xs text-gray-400">
                                             ROI
                                         </div>
                                         <div className="text-xl font-bold min-h-[1.5rem] flex items-center">
@@ -939,7 +1014,7 @@ function ExecutiveWorkspace({
                                     />
                                 </div>
                             ) : (
-                                <div className="text-center text-slate-500 py-6 text-sm">
+                                <div className="text-center text-gray-500 py-6 text-sm">
                                     — Coming soon
                                 </div>
                             )
@@ -970,12 +1045,12 @@ function ExecutiveWorkspace({
                         title="Triage Efficiency"
                         content={
                             <div className="space-y-2 mt-3">
-                                <div className="text-xs text-slate-400">
+                                <div className="text-xs text-gray-400">
                                     Desktop vs Onsite Split
                                 </div>
                                 <div className="flex gap-4">
                                     <div>
-                                        <div className="text-xs text-slate-500">
+                                        <div className="text-xs text-gray-500">
                                             Desktop
                                         </div>
                                         <div className="text-xl font-bold">
@@ -983,7 +1058,7 @@ function ExecutiveWorkspace({
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="text-xs text-slate-500">
+                                        <div className="text-xs text-gray-500">
                                             Onsite
                                         </div>
                                         <div className="text-xl font-bold">
@@ -998,25 +1073,25 @@ function ExecutiveWorkspace({
             </div>
 
             {slaStatus && slaStatus.active_claims.length > 0 && (
-                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 mt-8">
-                    <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-widest mb-4">
+                <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 p-6 mt-8">
+                    <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-4">
                         Active SLA Claims
                     </h3>
                     <div className="space-y-2">
                         {slaStatus.active_claims.map(claim => (
                             <div
                                 key={claim.claim_ref}
-                                className={`flex justify-between items-center p-4 rounded-xl border ${
+                                className={`flex justify-between items-center p-4 rounded-lg border ${
                                     claim.is_overdue
                                         ? 'border-red-500/50 bg-red-500/10'
-                                        : 'border-neutral-700/80 bg-neutral-800/40'
+                                        : 'border-gray-700 bg-black/30'
                                 }`}
                             >
                                 <div>
                                     <p className="font-medium text-white tabular-nums">
                                         {claim.claim_ref}
                                     </p>
-                                    <p className="text-xs text-neutral-500 mt-0.5">
+                                    <p className="text-xs text-gray-500 mt-0.5">
                                         {claim.vehicle} · {claim.insurer}
                                     </p>
                                 </div>
@@ -1025,7 +1100,7 @@ function ExecutiveWorkspace({
                                         className={`font-semibold text-sm tabular-nums ${
                                             claim.is_overdue
                                                 ? 'text-red-400'
-                                                : 'text-neutral-300'
+                                                : 'text-gray-300'
                                         }`}
                                     >
                                         {claim.is_overdue
@@ -1034,7 +1109,7 @@ function ExecutiveWorkspace({
                                                   claim.hours_remaining
                                               ).toFixed(1)}h left`}
                                     </p>
-                                    <p className="text-[11px] text-neutral-500 capitalize">
+                                    <p className="text-[11px] text-gray-500 capitalize">
                                         {claim.status}
                                     </p>
                                 </div>
@@ -1057,19 +1132,19 @@ function BigStatCard({
     loading,
 }: any) {
     return (
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6 hover:border-neutral-700 transition-colors">
-            <p className="text-sm font-medium text-neutral-400 mb-1">{title}</p>
-            <div className="text-4xl font-semibold tabular-nums min-h-[2.75rem] flex items-center mb-1">
+        <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 p-6 hover:border-amber-500/40 transition-all duration-200 ease-out hover:-translate-y-0.5">
+            <p className="text-sm font-medium text-gray-400 mb-1">{title}</p>
+            <div className="text-4xl font-semibold tabular-nums min-h-[2.75rem] flex items-center mb-1 text-white">
                 {loading ? (
                     <Skeleton className="w-24 h-10 rounded-xl" style="full" />
                 ) : (
                     value
                 )}
             </div>
-            <p className="text-xs text-neutral-500 mb-3">{subtitle}</p>
+            <p className="text-xs text-gray-500 mb-3">{subtitle}</p>
             <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[11px] text-neutral-500">{trend}</span>
-                <span className="text-sm font-medium text-red-400 min-h-[1.25rem] flex items-center">
+                <span className="text-[11px] text-gray-500">{trend}</span>
+                <span className="text-sm font-medium text-amber-400 min-h-[1.25rem] flex items-center">
                     {loading ? (
                         <Skeleton className="w-20" style="short" />
                     ) : (
@@ -1080,7 +1155,7 @@ function BigStatCard({
             {actionText && (
                 <button
                     type="button"
-                    className="mt-4 text-xs font-medium text-red-400 hover:text-red-300 transition-colors"
+                    className="mt-4 text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors duration-200 active:scale-95"
                 >
                     {actionText}
                 </button>
@@ -1091,16 +1166,16 @@ function BigStatCard({
 
 function MediumStatCard({ title, value, subtitle, details, loading }: any) {
     return (
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
-            <p className="text-sm font-medium text-neutral-400 mb-1">{title}</p>
-            <div className="text-3xl font-semibold tabular-nums min-h-[2.25rem] flex items-center mb-1">
+        <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 p-5 transition-all duration-200 ease-out hover:border-amber-500/40 hover:-translate-y-0.5">
+            <p className="text-sm font-medium text-gray-400 mb-1">{title}</p>
+            <div className="text-3xl font-semibold tabular-nums min-h-[2.25rem] flex items-center mb-1 text-white">
                 {loading ? (
                     <Skeleton className="w-16 h-9 rounded-lg" style="full" />
                 ) : (
                     value
                 )}
             </div>
-            <p className="text-[11px] text-neutral-500 mb-4">{subtitle}</p>
+            <p className="text-[11px] text-gray-500 mb-4">{subtitle}</p>
             {details && (
                 <div className="space-y-2">
                     {details.map((detail: any, idx: number) => (
@@ -1108,10 +1183,10 @@ function MediumStatCard({ title, value, subtitle, details, loading }: any) {
                             key={idx}
                             className="flex justify-between text-xs items-center"
                         >
-                            <span className="text-neutral-500">
+                            <span className="text-gray-500">
                                 {detail.label}
                             </span>
-                            <span className="text-neutral-300 font-medium tabular-nums text-right min-w-[2rem]">
+                            <span className="text-gray-300 font-medium tabular-nums text-right min-w-[2rem]">
                                 {loading ? (
                                     <Skeleton
                                         className="w-8 h-4 inline-block rounded"
@@ -1131,8 +1206,8 @@ function MediumStatCard({ title, value, subtitle, details, loading }: any) {
 
 function AnalyticsCard({ title, stats, content, loading }: any) {
     return (
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
-            <p className="text-sm font-medium text-neutral-400 mb-4">{title}</p>
+        <div className="rounded-xl border border-amber-500/20 bg-gray-900/50 p-5 transition-all duration-200 ease-out hover:border-amber-500/40 hover:-translate-y-0.5">
+            <p className="text-sm font-medium text-gray-400 mb-4">{title}</p>
             {stats && (
                 <div className="space-y-2.5">
                     {stats.map((stat: any, idx: number) => (
@@ -1140,14 +1215,14 @@ function AnalyticsCard({ title, stats, content, loading }: any) {
                             key={idx}
                             className="flex justify-between items-center"
                         >
-                            <span className="text-xs text-neutral-500">
+                            <span className="text-xs text-gray-500">
                                 {stat.label}
                             </span>
                             <span
                                 className={`text-sm font-semibold tabular-nums ${
                                     stat.color === 'red'
                                         ? 'text-red-400'
-                                        : 'text-neutral-300'
+                                        : 'text-gray-300'
                                 }`}
                             >
                                 {loading ? (
@@ -1170,11 +1245,15 @@ function AnalyticsCard({ title, stats, content, loading }: any) {
 
 function PlaceholderWorkspace({ title }: { title: string }) {
     return (
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-12 text-center">
+        <div className="rounded-xl border border-amber-500/20 bg-gray-900/40 p-12 text-center">
             <h2 className="text-lg font-semibold text-white mb-2">{title}</h2>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-gray-500">
                 {title.replace(/^[^\s]+\s/, '')} coming soon.
             </p>
         </div>
     );
+}
+
+export default function CICOPDashboard() {
+    return <CICOPDashboardContent />;
 }

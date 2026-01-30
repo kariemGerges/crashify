@@ -27,7 +27,7 @@ function getDateRange(dateRange: string | null): { from: string; to: string } | 
 /**
  * GET /api/cicop/assessments/stats
  * Get assessment statistics for dashboard
- * Query params: insurer, repairer, vehicle_make, assessment_type, date_range (last-7|last-30|last-90|this-year)
+ * Query params: insurer, repairer, vehicle_make, assessment_type, date_range (all|last-7|last-30|last-90|this-year). Use "all" or omit for no date filter.
  */
 export async function GET(request: NextRequest) {
   try {
