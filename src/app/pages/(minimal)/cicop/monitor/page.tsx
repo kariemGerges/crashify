@@ -41,7 +41,7 @@ interface SLAItem {
 function AssessmentMonitorContent() {
   const searchParams = useSearchParams();
   const fromAdmin = searchParams?.get('from') === 'admin';
-  const backHref = fromAdmin ? '/pages/admin?tab=dashboard' : '/pages/cicop';
+  const backHref = '/pages/admin?tab=dashboard';
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [slaData, setSlaData] = useState<{ active_claims: SLAItem[] }>({ active_claims: [] });
   const [loading, setLoading] = useState(true);

@@ -13,7 +13,7 @@ function AssessmentDetailContent({
     const { id: routeId } = use(params);
     const searchParams = useSearchParams();
     const fromAdmin = searchParams?.get('from') === 'admin';
-    const backHref = fromAdmin ? '/pages/admin?tab=dashboard' : '/pages/cicop';
+    const backHref = '/pages/admin?tab=dashboard';
     const [assessment, setAssessment] = useState<Record<
         string,
         unknown

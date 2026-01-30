@@ -39,7 +39,7 @@ interface DraftResponse {
 function EmailMonitorContent() {
   const searchParams = useSearchParams();
   const fromAdmin = searchParams?.get('from') === 'admin';
-  const backHref = fromAdmin ? '/pages/admin?tab=dashboard' : '/pages/cicop';
+  const backHref = '/pages/admin?tab=dashboard';
   const [emails, setEmails] = useState<Email[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [draftResponse, setDraftResponse] = useState<DraftResponse | null>(null);

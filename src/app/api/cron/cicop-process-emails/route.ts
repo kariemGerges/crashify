@@ -25,23 +25,26 @@ export async function GET(request: NextRequest) {
     const slaStarted = results.filter(r => r.sla_started).length;
     const complaintsDetected = results.filter(r => r.complaint_detected).length;
     const autoResponsesSent = results.filter(r => r.auto_response_sent).length;
+    const complaintAcksSent = results.filter(r => r.complaint_ack_sent).length;
+    const repairerAcksSent = results.filter(r => r.repairer_ack_sent).length;
+    const followUpsHandled = results.filter(r => r.follow_up_handled).length;
     const skippedUnauthorized = results.filter(r => r.skipped_unauthorized).length;
     const errors = results.filter(r => r.error).length;
+    const acknowledgmentsTotal = autoResponsesSent + complaintAcksSent + repairerAcksSent;
 
     // Log daily stats
     const supabase = createServerClient();
     const today = new Date().toISOString().split('T')[0];
-    
-    // cicop_daily_stats may be missing from generated DB types
-    await supabase
+
+    await (supabase as any)
       .from('cicop_daily_stats')
-      // @ts-expect-error - table may be missing from generated types
       .upsert({
         date: today,
         emails_processed: processed,
-        acknowledgments_sent: autoResponsesSent,
+        acknowledgments_sent: acknowledgmentsTotal,
+        follow_ups_handled: followUpsHandled,
         complaints_detected: complaintsDetected,
-        errors
+        errors,
       });
 
     const summary = {
@@ -51,9 +54,12 @@ export async function GET(request: NextRequest) {
       sla_started: slaStarted,
       complaints_detected: complaintsDetected,
       auto_responses_sent: autoResponsesSent,
+      complaint_acks_sent: complaintAcksSent,
+      repairer_acks_sent: repairerAcksSent,
+      follow_ups_handled: followUpsHandled,
       skipped_unauthorized: skippedUnauthorized,
       errors,
-      success: true
+      success: true,
     };
 
     console.log('✅ CICOP email processing complete:', summary);

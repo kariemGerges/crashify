@@ -39,7 +39,7 @@ interface Assessment {
 function AssessmentBrowserContent() {
   const searchParams = useSearchParams();
   const fromAdmin = searchParams?.get('from') === 'admin';
-  const backHref = fromAdmin ? '/pages/admin?tab=dashboard' : '/pages/cicop';
+  const backHref = '/pages/admin?tab=dashboard';
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [filteredAssessments, setFilteredAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);

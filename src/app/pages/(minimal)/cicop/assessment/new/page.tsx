@@ -20,7 +20,7 @@ function NewAssessmentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromAdmin = searchParams?.get('from') === 'admin';
-  const backHref = fromAdmin ? '/pages/admin?tab=dashboard' : '/pages/cicop';
+  const backHref = '/pages/admin?tab=dashboard';
   const [activeSection, setActiveSection] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

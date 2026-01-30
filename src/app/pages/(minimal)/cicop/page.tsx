@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, RefreshCw, Download, Plus, LayoutDashboard, PieChart, Car, FileText, DollarSign, ShieldAlert, Building2, Brain, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 
@@ -548,7 +549,7 @@ export function CICOPDashboardContent({
         <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white font-sans antialiased">
             <header className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-6 bg-gray-900/95 backdrop-blur-md border-b border-amber-500/20">
                 <Link
-                    href="/pages/cicop"
+                    href="/pages/admin?tab=dashboard"
                     className="flex items-center shrink-0 mr-8"
                 >
                     <span className="text-lg font-semibold tracking-tight text-white">
@@ -588,7 +589,7 @@ export function CICOPDashboardContent({
                                 searchResults.map(result => (
                                     <Link
                                         key={result.assessment_no}
-                                        href={`/pages/cicop/assessment/${result.assessment_no}`}
+                                        href={`/pages/cicop/assessment/${result.assessment_no}?from=admin`}
                                         className="block px-4 py-3 border-b border-gray-800 last:border-0 hover:bg-white/5 transition-colors"
                                     >
                                         <div className="flex justify-between items-start gap-2 mb-1.5">
@@ -1254,6 +1255,18 @@ function PlaceholderWorkspace({ title }: { title: string }) {
     );
 }
 
-export default function CICOPDashboard() {
-    return <CICOPDashboardContent />;
+/** /pages/cicop redirects to admin Dashboard (CICOP lives under admin now) */
+export default function CICOPPageRedirect() {
+    const router = useRouter();
+    useEffect(() => {
+        router.replace('/pages/admin?tab=dashboard');
+    }, [router]);
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+                <RefreshCw className="w-8 h-8 animate-spin text-amber-400" />
+                <p className="text-sm text-gray-400">Redirecting to Dashboard...</p>
+            </div>
+        </div>
+    );
 }

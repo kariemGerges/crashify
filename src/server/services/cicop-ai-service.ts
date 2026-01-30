@@ -551,6 +551,156 @@ Return ONLY JSON, no other text.`;
     }
 
     /**
+     * Detect if email contains regulatory questions (AFCA, ombudsman, legal, etc.)
+     * v5.1 – audit only; no special response.
+     */
+    detectRegulatoryQuestion(emailData: {
+        subject: string;
+        content: string;
+    }): { has_regulatory_content: true; keywords: string[]; confidence: number } | null {
+        const combined = `${emailData.subject} ${emailData.content}`.toLowerCase();
+        const regulatoryKeywords = [
+            'afca',
+            'ombudsman',
+            'financial complaints',
+            'regulatory',
+            'compliance',
+            'legal action',
+            'lawyer',
+            'solicitor',
+            'consumer protection',
+            'fair trading',
+            'accc',
+            'insurance council',
+            'tribunal',
+            'dispute resolution',
+        ];
+        const found = regulatoryKeywords.filter(kw => combined.includes(kw));
+        if (found.length === 0) return null;
+        return {
+            has_regulatory_content: true,
+            keywords: found,
+            confidence: 0.9,
+        };
+    }
+
+    /**
+     * Detect repairer submission (supplementary quote/images).
+     * v5.1 – must have attachment indicators or repairer keywords/domain.
+     */
+    detectRepairerSubmission(emailData: {
+        subject: string;
+        content: string;
+        sender: string;
+        hasAttachments?: boolean;
+    }): {
+        is_repairer: true;
+        submission_type: string;
+        keywords: string[];
+        has_attachments: boolean;
+        confidence: number;
+    } | null {
+        const subject = (emailData.subject || '').toLowerCase();
+        const content = (emailData.content || '').toLowerCase();
+        const sender = (emailData.sender || '').toLowerCase();
+        const combined = `${subject} ${content}`;
+
+        const repairerKeywords = [
+            'supplementary quote',
+            'revised quote',
+            'updated quote',
+            'repair estimate',
+            'workshop quote',
+            'quote revision',
+            'further damage',
+            'additional repair',
+        ];
+        const attachmentKeywords = [
+            'photos attached',
+            'images attached',
+            'pictures attached',
+            'photos included',
+            'images included',
+        ];
+        const repairerDomains = [
+            'repairer',
+            'smash',
+            'panel',
+            'auto',
+            'collision',
+            'bodyshop',
+            'workshop',
+        ];
+
+        const isRepairerDomain = repairerDomains.some(d => sender.includes(d));
+        const foundRepairer = repairerKeywords.filter(kw => combined.includes(kw));
+        const foundAttachment = attachmentKeywords.filter(kw => combined.includes(kw));
+
+        const customerFollowupPatterns = [
+            'supp for claim',
+            'supplement for claim',
+            'for claim no',
+            'claim number',
+        ];
+        if (customerFollowupPatterns.some(p => subject.includes(p))) {
+            return null;
+        }
+
+        if (
+            foundRepairer.length === 0 &&
+            foundAttachment.length === 0 &&
+            !isRepairerDomain
+        ) {
+            return null;
+        }
+
+        const hasAttachmentKeywords =
+            foundAttachment.length > 0 ||
+            /attached|attachment|please find|photo|image|picture|file|document|pdf|jpg|png/i.test(
+                combined
+            );
+        const hasAttachments =
+            Boolean(emailData.hasAttachments) || hasAttachmentKeywords;
+        if (!hasAttachments) return null;
+
+        const submissionType = combined.includes('quote')
+            ? 'supplementary_quote'
+            : 'images';
+
+        return {
+            is_repairer: true,
+            submission_type: submissionType,
+            keywords: [...foundRepairer, ...foundAttachment],
+            has_attachments: hasAttachments,
+            confidence: isRepairerDomain ? 0.9 : 0.75,
+        };
+    }
+
+    /**
+     * Classify follow-up email intent.
+     * Returns: info_request | status_update | complaint | additional_info | other
+     */
+    async classifyFollowUp(
+        emailData: { content: string },
+        _claimRef: string
+    ): Promise<string> {
+        const content = (emailData.content || '').toLowerCase();
+        if (['status', 'update', 'when', 'how long', 'eta'].some(kw => content.includes(kw))) {
+            return 'info_request';
+        }
+        if (['attached', 'photo', 'document', 'here is'].some(kw => content.includes(kw))) {
+            return 'additional_info';
+        }
+        if (['complaint', 'disappointed', 'unacceptable'].some(kw => content.includes(kw))) {
+            return 'complaint';
+        }
+        if (['update', 'fyi', 'please note'].some(kw => content.includes(kw))) {
+            return 'status_update';
+        }
+        return 'other';
+    }
+
+    /**
      * Log audit event
      */
     private async logAudit(
