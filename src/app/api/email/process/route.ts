@@ -456,6 +456,42 @@ export async function GET(request: NextRequest) {
     const startTime = Date.now();
 
     try {
+        // Protect this diagnostic endpoint with the same bearer token used for processing
+        const authHeader = request.headers.get('authorization');
+        const expectedToken = process.env.EMAIL_PROCESSOR_TOKEN;
+
+        if (!expectedToken || !authHeader || authHeader !== `Bearer ${expectedToken}`) {
+            const rawIpHeader = request.headers.get('x-forwarded-for');
+            const ipAddress = validateAndExtractIp(rawIpHeader);
+            const userAgent = request.headers.get('user-agent') || null;
+
+            await logSecurityEvent(
+                'api_access' as AuditAction,
+                {
+                    requestId,
+                    endpoint: '/api/email/process',
+                    method: 'GET',
+                    reason: 'Unauthorized configuration healthcheck access',
+                },
+                ipAddress || undefined,
+                userAgent || undefined
+            );
+
+            return NextResponse.json(
+                {
+                    status: 'unauthorized',
+                    message: 'Authorization required for configuration diagnostics',
+                    requestId,
+                },
+                {
+                    status: 401,
+                    headers: {
+                        'X-Request-ID': requestId,
+                    },
+                }
+            );
+        }
+
         const rawIpHeader = request.headers.get('x-forwarded-for');
         const ipAddress = validateAndExtractIp(rawIpHeader);
         const userAgent = request.headers.get('user-agent') || null;

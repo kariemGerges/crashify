@@ -17,6 +17,7 @@ import { cicopAIService } from './cicop-ai-service';
 import { cicopSlaService } from './cicop-sla-service';
 import { getGreetingRecipient, getGreeting } from './name-extractor';
 import { getMicrosoftGraphToken } from './microsoft-graph-auth';
+import { createLogger } from '@/server/lib/utils/logger';
 
 interface ProcessedEmailResult {
   email_id: string;
@@ -38,6 +39,8 @@ interface CICOPConfig {
   auto_reply_enabled: boolean;
   admin_alert_email: string;
 }
+
+const logger = createLogger('CICOPEmailIntegration');
 
 const AUTO_REPLY_PATTERNS = [
   /out of (the )?office/i,
@@ -204,7 +207,9 @@ export class CICOPEmailIntegration {
       if (!response.ok) throw new Error(`Failed to fetch emails: ${response.statusText}`);
       const data = await response.json();
       const emails = data.value || [];
-      console.log(`📧 Fetched ${emails.length} recent emails`);
+      logger.info('Fetched recent emails', {
+        count: emails.length,
+      });
 
       for (const email of emails) {
         const result = await this.processEmail(email, config, supabase);
@@ -212,7 +217,7 @@ export class CICOPEmailIntegration {
       }
       return results;
     } catch (error: any) {
-      console.error('❌ Error polling emails:', error);
+      logger.error('Error polling emails', error);
       throw error;
     }
   }
@@ -245,7 +250,9 @@ export class CICOPEmailIntegration {
     try {
       // ————— CRITICAL: Skip self-emails (prevents infinite loops) —————
       if (sender === emailToMonitor) {
-        console.log('⏭️  SKIPPING: Email from monitoring address (self-email)');
+        logger.info('Skipping self email from monitoring address', {
+          sender,
+        });
         await markProcessed(supabase, {
           email_id: emailId,
           sender,
@@ -260,24 +267,24 @@ export class CICOPEmailIntegration {
       // ————— Should process? (dedup: already_processed, message_id, thread, auto_reply) —————
       const alreadyProcessed = await isEmailProcessed(supabase, emailId);
       if (alreadyProcessed) {
-        console.log(`⏭️  Email ${emailId} already processed`);
+        logger.debug('Email already processed', { emailId });
         result.processed = true;
         return result;
       }
 
       const messageIdHash = computeMessageHash(internetMessageId);
       if (messageIdHash && (await isMessageIdProcessed(supabase, messageIdHash))) {
-        console.log('⏭️  Duplicate message_id – skip');
+        logger.debug('Duplicate message_id detected, skipping', { emailId });
         result.processed = true;
         return result;
       }
       if (conversationId && (await isThreadProcessed(supabase, conversationId))) {
-        console.log('⏭️  Duplicate thread – skip');
+        logger.debug('Duplicate thread detected, skipping', { emailId, conversationId });
         result.processed = true;
         return result;
       }
       if (isAutoReply(subject, content)) {
-        console.log('⏭️  Auto-reply detected – skip');
+        logger.info('Auto-reply detected, skipping', { emailId, sender });
         await markProcessed(supabase, {
           email_id: emailId,
           sender,
@@ -299,7 +306,11 @@ export class CICOPEmailIntegration {
       // ————— Priority 1: Complaint —————
       const complaintDetection = await cicopAIService.detectComplaint({ subject, content });
       if (complaintDetection !== null) {
-        console.log(`🚨 COMPLAINT DETECTED – ${complaintDetection.severity}`);
+        logger.info('Complaint detected', {
+          emailId,
+          severity: complaintDetection.severity,
+          complaint_type: complaintDetection.complaint_type,
+        });
         const complaintData = {
           complaint_type: complaintDetection.complaint_type,
           severity: complaintDetection.severity,
@@ -343,7 +354,10 @@ export class CICOPEmailIntegration {
       // ————— Priority 1.5: Regulatory (audit only) —————
       const regulatory = cicopAIService.detectRegulatoryQuestion({ subject, content });
       if (regulatory) {
-        console.log(`⚖️ Regulatory question detected: ${regulatory.keywords.join(', ')}`);
+        logger.info('Regulatory question detected', {
+          emailId,
+          keywords: regulatory.keywords,
+        });
         await (supabase as any).from('cicop_audit_log').insert({
           event_type: 'regulatory_detected',
           action: 'regulatory_question_flagged',
@@ -362,7 +376,10 @@ export class CICOPEmailIntegration {
       });
       if (repairerData && (hasRealClaimRef || hasVehicleRego)) {
         const repClaimRef = claimRef || `REPAIRER-${emailId.slice(0, 8)}`;
-        console.log(`🔧 REPAIRER SUBMISSION – ${repairerData.submission_type}`);
+        logger.info('Repairer submission detected', {
+          emailId,
+          submission_type: repairerData.submission_type,
+        });
         const repAckSent = await this.sendRepairerAck(sender, repClaimRef, repairerData, receivedAt, config.email_to_monitor, supabase);
         result.repairer_ack_sent = repAckSent;
         await markProcessed(supabase, {
@@ -377,7 +394,9 @@ export class CICOPEmailIntegration {
         return result;
       }
       if (repairerData && !hasRealClaimRef && !hasVehicleRego) {
-        console.log('⏭️  Repairer submission lacks claim/rego – skip ack');
+        logger.info('Repairer submission lacks claim/rego, skipping ack', {
+          emailId,
+        });
         await markProcessed(supabase, {
           email_id: emailId,
           sender,
@@ -397,7 +416,10 @@ export class CICOPEmailIntegration {
       const isFollowUp = hasFollowUpKeywords || isFollowUpDb;
 
       if (isFollowUp) {
-        console.log(`🔄 FOLLOW-UP detected: ${claimRef}`);
+        logger.info('Follow-up email detected', {
+          emailId,
+          claim_reference: claimRef,
+        });
         if (!claimRef || claimRef.startsWith('AUTO-')) {
           await markProcessed(supabase, {
             email_id: emailId,
@@ -436,7 +458,10 @@ export class CICOPEmailIntegration {
 
       // ————— Priority 3: New job (authorized senders only) —————
       if (!isAuthorizedSender(sender, config.authorized_senders)) {
-        console.log(`⏭️  Unauthorized sender for new job: ${sender}`);
+        logger.info('Unauthorized sender for new job', {
+          emailId,
+          sender,
+        });
         await markProcessed(supabase, {
           email_id: emailId,
           sender,
@@ -449,7 +474,10 @@ export class CICOPEmailIntegration {
         return result;
       }
       if (!isInsurerEnabled(sender, config.insurer_override)) {
-        console.log(`⏭️  Insurer disabled: ${sender}`);
+        logger.info('Insurer disabled for sender', {
+          emailId,
+          sender,
+        });
         await markProcessed(supabase, {
           email_id: emailId,
           sender,
@@ -462,7 +490,9 @@ export class CICOPEmailIntegration {
       }
 
       if (!hasRealClaimRef && !hasVehicleRego) {
-        console.log('⏭️  No valid claim ref and no vehicle rego – skip');
+        logger.info('No valid claim reference or vehicle rego, skipping', {
+          emailId,
+        });
         await markProcessed(supabase, {
           email_id: emailId,
           sender,
@@ -477,7 +507,10 @@ export class CICOPEmailIntegration {
 
       const finalClaimRef = claimRef || `AUTO-${emailId.slice(0, 8)}`;
       if (await isClaimRefProcessed(supabase, finalClaimRef)) {
-        console.log(`⏭️  Claim ref ${finalClaimRef} already processed`);
+        logger.info('Claim reference already processed, skipping', {
+          emailId,
+          claim_reference: finalClaimRef,
+        });
         await markProcessed(supabase, {
           email_id: emailId,
           sender,
@@ -491,7 +524,9 @@ export class CICOPEmailIntegration {
       }
 
       if (!config.auto_reply_enabled) {
-        console.log('⏸️  Auto-reply disabled globally');
+        logger.info('Auto-reply disabled globally, skipping auto-response', {
+          emailId,
+        });
         await markProcessed(supabase, {
           email_id: emailId,
           sender,
@@ -534,7 +569,9 @@ export class CICOPEmailIntegration {
       result.processed = true;
       return result;
     } catch (error: any) {
-      console.error(`❌ Error processing email ${emailId}:`, error);
+      logger.error('Error processing email', error, {
+        emailId,
+      });
       result.error = error.message;
       return result;
     }
@@ -579,7 +616,7 @@ export class CICOPEmailIntegration {
         .single();
       const template = templateRow as { subject_template?: string; body_template?: string } | null;
       if (!template?.subject_template || !template?.body_template) {
-        console.error('❌ No default_acknowledgment template');
+        logger.error('No default_acknowledgment template found');
         return false;
       }
       const customerName = getGreetingRecipient(recipient, options.displayName ?? null, options.content ?? null);
@@ -618,7 +655,10 @@ export class CICOPEmailIntegration {
         }
       );
       if (!res.ok) throw new Error(`Send failed: ${res.statusText}`);
-      console.log(`✅ Auto-response sent to ${recipient}`);
+      logger.info('Auto-response sent', {
+        recipient,
+        claim_reference: analysis.claim_reference,
+      });
       await (supabase as any).from('cicop_audit_log').insert({
         event_type: 'auto_response',
         action: 'email_sent',
@@ -627,7 +667,9 @@ export class CICOPEmailIntegration {
       });
       return true;
     } catch (error) {
-      console.error('Error sending auto-response:', error);
+      logger.error('Error sending auto-response', error, {
+        recipient,
+      });
       return false;
     }
   }
@@ -689,7 +731,10 @@ export class CICOPEmailIntegration {
       }
       return ok;
     } catch (error) {
-      console.error('Error sending complaint ack:', error);
+      logger.error('Error sending complaint acknowledgment', error, {
+        recipient: to,
+        claim_reference: claimRef,
+      });
       return false;
     }
   }
@@ -730,7 +775,10 @@ export class CICOPEmailIntegration {
       });
       return this.sendRawEmail(to, subject, body, fromEmail, supabase);
     } catch (error) {
-      console.error('Error sending repairer ack:', error);
+      logger.error('Error sending repairer acknowledgment', error, {
+        recipient: to,
+        claim_reference: claimRef,
+      });
       return false;
     }
   }
@@ -771,10 +819,15 @@ export class CICOPEmailIntegration {
         }
       );
       if (!res.ok) throw new Error(`Send failed: ${res.statusText}`);
-      console.log(`✅ Email sent to ${to}: ${subject.slice(0, 40)}...`);
+      logger.info('Email sent', {
+        recipient: to,
+        subjectPreview: subject.slice(0, 40),
+      });
       return true;
     } catch (error) {
-      console.error('Error sending email:', error);
+      logger.error('Error sending email', error, {
+        recipient: to,
+      });
       return false;
     }
   }
