@@ -34,9 +34,8 @@ export default function Footer() {
             icon: MapPin,
             value: (
                 <>
-                    81-83 Cambell St
-                    <br />
-                    Surry Hills, NSW 2010, Australia
+                    
+                    Level 1, 63-73 Ann Street, Surry Hills, NSW 2010
                 </>
             ),
         },
