@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import {
     Eye,
     Zap,
@@ -99,6 +100,23 @@ export default function CrashifyAbout() {
             ],
             color: 'from-yellow-500 to-orange-500',
             delay: '500',
+        },
+    ];
+
+    const certifications = [
+        {
+            href: 'https://www.aami.com.au/',
+            src: '/AU.png',
+            alt: 'AU logo',
+            width: 730,
+            height: 730,
+        },
+        {
+            href: 'https://www.example-industry-body.com.au/',
+            src: '/UAC.jpg',
+            alt: 'UAC logo',
+            width: 874,
+            height: 543,
         },
     ];
 
@@ -685,6 +703,36 @@ export default function CrashifyAbout() {
                                 regulatory requirements, industry standards, and
                                 operational practices.
                             </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Certified & Accredited */}
+                <div className="mb-20">
+                    <div className="max-w-6xl mx-auto">
+                        <div className="relative p-8 md:p-12 bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl">
+                            <p className="text-slate-400 text-sm uppercase tracking-wider mb-8 sm:mb-10 text-center">
+                                Certified & Accredited
+                            </p>
+                            <div className="flex flex-wrap items-center justify-center gap-10 sm:gap-16 md:gap-20">
+                                {certifications.map(cert => (
+                                    <a
+                                        key={cert.src}
+                                        href={cert.href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="opacity-70 hover:opacity-100 grayscale hover:grayscale-0 transition-all duration-300"
+                                    >
+                                        <Image
+                                            src={cert.src}
+                                            alt={cert.alt}
+                                            width={cert.width}
+                                            height={cert.height}
+                                            className="h-32 sm:h-40 md:h-48 w-auto object-contain"
+                                        />
+                                    </a>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>

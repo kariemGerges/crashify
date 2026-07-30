@@ -1,6 +1,7 @@
 import { Phone, Mail, MapPin, X, Linkedin, Youtube } from 'lucide-react';
 import Link from 'next/link';
 import Logo from '@/app/components/logo';
+import Image from 'next/image';
 
 export default function Footer() {
     const footerLinks = [
@@ -54,6 +55,19 @@ export default function Footer() {
         { href: '/pages/privacy', label: 'Privacy Policy' },
         { href: '/pages/terms', label: 'Terms of Service' },
         { href: '/pages/cookies', label: 'Cookie Policy' },
+    ];
+
+    const certifications = [
+        {
+            href: 'https://www.aami.com.au/',
+            src: '/AU.png',
+            alt: 'AU logo',
+        },
+        {
+            href: 'https://www.example-industry-body.com.au/',
+            src: '/UAC.jpg',
+            alt: 'UAC logo',
+        },
     ];
 
     const year = new Date().getFullYear();
@@ -163,6 +177,33 @@ export default function Footer() {
                         </ul>
                     </div>
                 </div>
+                
+                {/* Certifications */}
+                <div className="border-t border-gray-800/50 pt-8 sm:pt-10 mb-8 sm:mb-10">
+                    <p className="text-gray-500 text-xs sm:text-sm uppercase tracking-wider mb-4 sm:mb-6 text-center md:text-left">
+                        Certified & Accredited
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 sm:gap-8">
+        {certifications.map(cert => (
+            
+                <a
+                key={cert.src}
+                href={cert.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="opacity-70 hover:opacity-100 grayscale hover:grayscale-0 transition-all duration-300"
+            >
+                <Image
+                    src={cert.src}
+                    alt={cert.alt}
+                    width={140}
+                    height={140}
+                    className="h-10 sm:h-12 w-auto object-contain"
+                />
+            </a>
+        ))}
+        </div>
+                </div>
 
                 {/* Bottom Bar */}
                 <div className="border-t border-gray-800/50 pt-8 sm:pt-10 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
@@ -185,6 +226,7 @@ export default function Footer() {
                         ))}
                     </div>
                 </div>
+                
             </div>
         </footer>
     );

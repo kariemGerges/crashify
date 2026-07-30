@@ -3,6 +3,23 @@ import carImage from '../../../../public/heroCar.png';
 import TakeSpin from '../TakeSpin';
 import StatCard from '@/app/components/HomePage/animated-stats-cards';
 
+const certifications = [
+    {
+        href: 'https://www.aami.com.au/',
+        src: '/AU.png',
+        alt: 'AU logo',
+        width: 730,
+        height: 730,
+    },
+    {
+        href: 'https://www.example-industry-body.com.au/',
+        src: '/UAC.jpg',
+        alt: 'UAC logo',
+        width: 874,
+        height: 543,
+    },
+];
+
 export default function CrashifyHero() {
     return (
         <section className="relative min-h-screen bg-black overflow-hidden">
@@ -184,6 +201,32 @@ export default function CrashifyHero() {
                             delivery. No more chasing quotes, managing
                             spreadsheets, or waiting weeks for assessments.
                         </p>
+                    </div>
+
+                    {/* Certified & Accredited */}
+                    <div className="px-4 sm:px-6">
+                        <p className="text-gray-500 text-xs sm:text-sm uppercase tracking-wider mb-6 sm:mb-8">
+                            Certified & Accredited
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12 md:gap-16">
+                            {certifications.map(cert => (
+                                <a
+                                    key={cert.src}
+                                    href={cert.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="opacity-70 hover:opacity-100 grayscale hover:grayscale-0 transition-all duration-300"
+                                >
+                                    <Image
+                                        src={cert.src}
+                                        alt={cert.alt}
+                                        width={cert.width}
+                                        height={cert.height}
+                                        className="h-24 sm:h-32 md:h-40 w-auto object-contain"
+                                    />
+                                </a>
+                            ))}
+                        </div>
                     </div>
                     
                     {/* Stats Section */}
