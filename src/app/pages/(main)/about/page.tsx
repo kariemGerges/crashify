@@ -105,14 +105,12 @@ export default function CrashifyAbout() {
 
     const certifications = [
         {
-            href: 'https://www.aami.com.au/',
             src: '/AU.png',
             alt: 'AU logo',
             width: 730,
             height: 730,
         },
         {
-            href: 'https://www.example-industry-body.com.au/',
             src: '/UAC.jpg',
             alt: 'UAC logo',
             width: 874,
@@ -716,21 +714,14 @@ export default function CrashifyAbout() {
                             </p>
                             <div className="flex flex-wrap items-center justify-center gap-10 sm:gap-16 md:gap-20">
                                 {certifications.map(cert => (
-                                    <a
+                                    <Image
                                         key={cert.src}
-                                        href={cert.href}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="opacity-70 hover:opacity-100 grayscale hover:grayscale-0 transition-all duration-300"
-                                    >
-                                        <Image
-                                            src={cert.src}
-                                            alt={cert.alt}
-                                            width={cert.width}
-                                            height={cert.height}
-                                            className="h-32 sm:h-40 md:h-48 w-auto object-contain"
-                                        />
-                                    </a>
+                                        src={cert.src}
+                                        alt={cert.alt}
+                                        width={cert.width}
+                                        height={cert.height}
+                                        className="h-32 sm:h-40 md:h-48 w-auto object-contain"
+                                    />
                                 ))}
                             </div>
                         </div>

@@ -59,12 +59,10 @@ export default function Footer() {
 
     const certifications = [
         {
-            href: 'https://www.aami.com.au/',
             src: '/AU.png',
             alt: 'AU logo',
         },
         {
-            href: 'https://www.example-industry-body.com.au/',
             src: '/UAC.jpg',
             alt: 'UAC logo',
         },
@@ -184,25 +182,17 @@ export default function Footer() {
                         Certified & Accredited
                     </p>
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 sm:gap-8">
-        {certifications.map(cert => (
-            
-                <a
-                key={cert.src}
-                href={cert.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="opacity-70 hover:opacity-100 grayscale hover:grayscale-0 transition-all duration-300"
-            >
-                <Image
-                    src={cert.src}
-                    alt={cert.alt}
-                    width={140}
-                    height={140}
-                    className="h-10 sm:h-12 w-auto object-contain"
-                />
-            </a>
-        ))}
-        </div>
+                        {certifications.map(cert => (
+                            <Image
+                                key={cert.src}
+                                src={cert.src}
+                                alt={cert.alt}
+                                width={140}
+                                height={140}
+                                className="h-10 sm:h-12 w-auto object-contain"
+                            />
+                        ))}
+                    </div>
                 </div>
 
                 {/* Bottom Bar */}
